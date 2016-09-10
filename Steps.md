@@ -11,7 +11,7 @@
     * **\[done\]** Install Postgres
     * **\[done\]** Install Postfix
     * **\[done\]** Install Dovecot
-
+    
 * Create the database `emailmgr`
     * Re-create an SQL script for Postgres based on the dump from the MySQL `emailmgr` schema
     * Add creation of roles `reader` and `writer` to read and write the DB data over procedures
