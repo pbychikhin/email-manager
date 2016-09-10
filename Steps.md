@@ -7,10 +7,10 @@
     * Promote the second host to a second AD controller in the existing forest
 
 * Deploy a database host and email server
-    * Deploy Linux CentOS
-    * Install Postgres
-    * Install Postfix
-    * Install Dovecot
+    * **\[done\]** Deploy Linux CentOS
+    * **\[done\]** Install Postgres
+    * **\[done\]** Install Postfix
+    * **\[done\]** Install Dovecot
 
 * Create the database `emailmgr`
     * Re-create an SQL script for Postgres based on the dump from the MySQL `emailmgr` schema
