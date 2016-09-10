@@ -1,8 +1,8 @@
 # Steps of the project
 
 * Deploy the AD
-    * Deploy Windows standard server
-    * Clone it so there will be more than one AD host
+    * Deploy first Windows standard server
+    * Deploy second Windows standard server
     * Promote the first host to an AD controller
     * Promote the second host to a second AD controller in the existing forest
 
