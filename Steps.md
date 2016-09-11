@@ -9,6 +9,7 @@
 * Deploy a database host and email server
     * **\[done\]** Deploy Linux CentOS
     * **\[done\]** Install Postgres
+    * **\[done\]** Install MySQL
     * **\[done\]** Install Postfix
     * **\[done\]** Install Dovecot
     
