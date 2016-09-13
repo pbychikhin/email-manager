@@ -85,3 +85,24 @@ CREATE TABLE usn_tracking (
     );
 
 
+CREATE TYPE client_proto AS ENUM ('smtp', 'pop', 'imap');
+
+CREATE FUNCTION GetAccountSpoolDir(sp_name VARCHAR(510), sp_caller client_proto) RETURNS VARCHAR(255) AS $$
+    DECLARE
+        sp_acname VARCHAR(255) DEFAULT GetNamePart(sp_name, '@', 'name');
+        sp_acdomain VARCHAR(255) DEFAULT GetNamePart(sp_name, '@', 'domain');
+    BEGIN
+        IF (sp_acdomain IS NULL) THEN
+            SELECT name FROM domain INTO sp_acdomain WHERE id = (SELECT tab_id FROM tab_defaults WHERE tab_name = 'domain');
+        END IF;
+        IF (sp_caller = 'pop' OR sp_caller = 'imap') THEN
+            UPDATE account SET accessed = CURRENT_TIMESTAMP WHERE name = sp_acname AND active = TRUE AND
+			    domain_id = (SELECT id FROM domain WHERE name = sp_acdomain AND active = TRUE);
+	    END IF;
+	    RETURN
+	        (SELECT CONCAT(domain.spooldir, '/', account.spooldir)
+	            FROM account, domain
+		        WHERE account.name = sp_acname AND account.active = TRUE AND domain.name = sp_acdomain AND
+		            domain.active = TRUE AND account.domain_id = domain.id);
+    END;$$
+    LANGUAGE plpgsql;
