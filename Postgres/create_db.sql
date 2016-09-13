@@ -4,8 +4,8 @@ CREATE DATABASE emailmgr ENCODING = 'UTF8' LC_COLLATE = 'en_US.UTF-8' LC_CTYPE =
 
 CREATE TABLE domain (
 	id SERIAL PRIMARY KEY,
-	name VARCHAR(255) NOT NULL UNIQUE,
-	spooldir char(40) NOT NULL UNIQUE,
+	name TEXT NOT NULL UNIQUE,
+	spooldir TEXT NOT NULL UNIQUE,
 	created TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	modified TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -18,11 +18,11 @@ CREATE TABLE domain (
 CREATE TABLE account (
 	id SERIAL PRIMARY KEY,
 	domain_id INTEGER,
-	name VARCHAR(255) NOT NULL,
-	password VARCHAR(64) NOT NULL DEFAULT '',
+	name TEXT NOT NULL,
+	password TEXT NOT NULL DEFAULT '',
 	password_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-	fullname VARCHAR(255) DEFAULT NULL,
-	spooldir char(40) NOT NULL UNIQUE,
+	fullname TEXT DEFAULT NULL,
+	spooldir TEXT NOT NULL UNIQUE,
 	created TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	modified TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	accessed TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -41,8 +41,8 @@ CREATE INDEX idx_account_domain_id ON account(domain_id);
 
 CREATE TABLE alias_name (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE,
-    fullname VARCHAR(255) DEFAULT NULL,
+    name TEXT NOT NULL UNIQUE,
+    fullname TEXT DEFAULT NULL,
     created TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	modified TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -53,7 +53,7 @@ CREATE TABLE alias_name (
 CREATE TABLE alias_value (
     id SERIAL PRIMARY KEY,
     name_id INTEGER,
-    value VARCHAR(255) NOT NULL,
+    value TEXT NOT NULL,
     created TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	modified TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -63,14 +63,14 @@ CREATE TABLE alias_value (
 
 
 CREATE TABLE sysinfo (
-    pname VARCHAR(64) NOT NULL UNIQUE,
-    pvalue VARCHAR(64) NOT NULL
+    pname TEXT NOT NULL UNIQUE,
+    pvalue TEXT NOT NULL
     );
 
 
 CREATE TABLE tab_defaults (
     id SERIAL PRIMARY KEY,
-    tab_name VARCHAR(255) NOT NULL UNIQUE,
+    tab_name TEXT NOT NULL UNIQUE,
     tab_id INTEGER
     );
 
@@ -85,12 +85,34 @@ CREATE TABLE usn_tracking (
     );
 
 
+CREATE FUNCTION GetNamePart(sp_name TEXT, sp_delim TEXT, sp_partname TEXT) RETURNS TEXT AS $$
+    DECLARE
+        sp_delim_pos INTEGER DEFAULT POSITION(sp_delim IN sp_name);
+    BEGIN
+        IF (sp_partname = 'domain')
+        THEN
+            IF (sp_delim_pos = 0) THEN RETURN(NULL); END IF;
+            IF (CHAR_LENGTH(sp_name) = sp_delim_pos) THEN RETURN(NULL); END IF;
+            RETURN(SUBSTRING(sp_name FROM sp_delim_pos + 1));
+        END IF;
+        IF (sp_partname = 'name')
+        THEN
+            IF (sp_delim_pos = 1) THEN RETURN(NULL); END IF;
+            IF (sp_delim_pos = 0) THEN RETURN(sp_name); END IF;
+            RETURN(SUBSTRING(sp_name FROM 1 FOR sp_delim_pos - 1));
+        END IF;
+        RETURN(NULL);
+    END;
+    $$
+    LANGUAGE plpgsql;
+
+
 CREATE TYPE client_proto AS ENUM ('smtp', 'pop', 'imap');
 
-CREATE FUNCTION GetAccountSpoolDir(sp_name VARCHAR(510), sp_caller client_proto) RETURNS VARCHAR(255) AS $$
+CREATE FUNCTION GetAccountSpoolDir(sp_name TEXT, sp_caller client_proto) RETURNS TEXT AS $$
     DECLARE
-        sp_acname VARCHAR(255) DEFAULT GetNamePart(sp_name, '@', 'name');
-        sp_acdomain VARCHAR(255) DEFAULT GetNamePart(sp_name, '@', 'domain');
+        sp_acname TEXT DEFAULT GetNamePart(sp_name, '@', 'name');
+        sp_acdomain TEXT DEFAULT GetNamePart(sp_name, '@', 'domain');
     BEGIN
         IF (sp_acdomain IS NULL) THEN
             SELECT name FROM domain INTO sp_acdomain WHERE id = (SELECT tab_id FROM tab_defaults WHERE tab_name = 'domain');
@@ -106,3 +128,5 @@ CREATE FUNCTION GetAccountSpoolDir(sp_name VARCHAR(510), sp_caller client_proto)
 		            domain.active = TRUE AND account.domain_id = domain.id);
     END;$$
     LANGUAGE plpgsql;
+
+
