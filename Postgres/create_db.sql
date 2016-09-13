@@ -38,3 +38,50 @@ CREATE TABLE account (
 
 CREATE INDEX idx_account_fullname ON account(fullname);
 CREATE INDEX idx_account_domain_id ON account(domain_id);
+
+CREATE TABLE alias_name (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    fullname VARCHAR(255) DEFAULT NULL,
+    created TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	modified TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	active BOOLEAN NOT NULL DEFAULT TRUE,
+	public BOOLEAN NOT NULL DEFAULT FALSE
+    );
+
+
+CREATE TABLE alias_value (
+    id SERIAL PRIMARY KEY,
+    name_id INTEGER,
+    value VARCHAR(255) NOT NULL,
+    created TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	modified TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	active BOOLEAN NOT NULL DEFAULT TRUE,
+	CONSTRAINT name_value UNIQUE (name_id, value),
+	CONSTRAINT fk_alias_name_id FOREIGN KEY (name_id) REFERENCES alias_name(id) ON DELETE CASCADE
+    );
+
+
+CREATE TABLE sysinfo (
+    pname VARCHAR(64) NOT NULL UNIQUE,
+    pvalue VARCHAR(64) NOT NULL
+    );
+
+
+CREATE TABLE tab_defaults (
+    id SERIAL PRIMARY KEY,
+    tab_name VARCHAR(255) NOT NULL UNIQUE,
+    tab_id INTEGER
+    );
+
+
+CREATE TABLE usn_tracking (
+    id SERIAL PRIMARY KEY,
+    domain_id INTEGER NOT NULL,
+    dit_invocation_id BYTEA NOT NULL,
+    dit_usn BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT uk_ut_domain_dit UNIQUE (domain_id, dit_invocation_id),
+    CONSTRAINT fk_ut_domain_id FOREIGN KEY (domain_id) REFERENCES domain(id) ON DELETE CASCADE
+    );
+
+
