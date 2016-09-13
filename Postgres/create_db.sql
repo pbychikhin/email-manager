@@ -130,3 +130,28 @@ CREATE FUNCTION GetAccountSpoolDir(sp_name TEXT, sp_caller client_proto) RETURNS
     LANGUAGE plpgsql;
 
 
+CREATE FUNCTION GetFullSysName() RETURNS TEXT AS $$
+    DECLARE
+        sysname TEXT;
+        vmajor TEXT;
+        vminor TEXT;
+        vpatch TEXT;
+    BEGIN
+        SELECT pvalue INTO sysname FROM sysinfo WHERE pname = 'sysname';
+		SELECT pvalue INTO vmajor FROM sysinfo WHERE pname = 'vmajor';
+		SELECT pvalue INTO vminor FROM sysinfo WHERE pname = 'vminor';
+		SELECT pvalue INTO vpatch FROM sysinfo WHERE pname = 'vpatch';
+		RETURN(LOWER(CONCAT(sysname, ':', vmajor, ':', vminor, ':', vpatch)));
+	END;$$
+	LANGUAGE plpgsql;
+
+
+CREATE FUNCTION get_apache_digauth(sp_name TEXT, sp_realm TEXT) RETURNS TEXT AS $$
+    BEGIN
+        RETURN
+            (SELECT MD5(CONCAT(sp_name, ':', sp_realm, ':', account.password))
+                FROM account, domain
+		        WHERE domain.active = 1 AND account.name = sp_name AND domain.name = sp_realm AND
+			        account.domain_id = domain.id AND account.active = 1);
+	END;$$
+	LANGUAGE plpgsql;
