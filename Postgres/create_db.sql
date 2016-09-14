@@ -155,3 +155,46 @@ CREATE FUNCTION get_apache_digauth(sp_name TEXT, sp_realm TEXT) RETURNS TEXT AS 
 			        account.domain_id = domain.id AND account.active = 1);
 	END;$$
 	LANGUAGE plpgsql;
+
+
+CREATE FUNCTION sasl_getlogin(sp_name TEXT) RETURNS TEXT AS $$
+    DECLARE
+        sp_acname TEXT DEFAULT GetNamePart(sp_name, '@', 'name');
+        sp_acdomain TEXT DEFAULT GetNamePart(sp_name, '@', 'domain');
+        sp_defaultdomain TEXT DEFAULT (SELECT name FROM domain WHERE id = (SELECT tab_id
+		    FROM tab_defaults WHERE tab_name = 'domain'));
+		sp_logins TEXT DEFAULT NULL;
+    BEGIN
+        IF (sp_acname IS NULL OR sp_acdomain IS NULL) THEN
+		    RETURN(NULL);
+		END IF;
+		SELECT CONCAT(account.name, '@', domain.name) INTO sp_logins
+		    FROM account, domain
+		    WHERE account.name = sp_acname AND account.active = TRUE AND domain.name = sp_acdomain AND
+		        domain.active = TRUE AND account.domain_id = domain.id;
+		IF (sp_logins IS NOT NULL AND sp_acdomain = sp_defaultdomain) THEN
+		    sp_logins = CONCAT(sp_logins, ',', GetNamePart(sp_logins, '@', 'name'));
+	    END IF;
+	    RETURN(sp_logins);
+	END;$$
+	LANGUAGE plpgsql;
+
+
+CREATE FUNCTION sasl_getpass(sp_name TEXT) RETURNS TEXT AS $$
+    DECLARE
+        sp_acname TEXT DEFAULT GetNamePart(sp_name, '@', 'name');
+        sp_acdomain TEXT DEFAULT GetNamePart(sp_name, '@', 'domain');
+    BEGIN
+        IF (sp_acdomain IS NULL) THEN
+        	SELECT name INTO sp_acdomain
+		        FROM domain
+		        WHERE id = (SELECT tab_id FROM tab_defaults WHERE tab_name = 'domain');
+		END IF;
+		RETURN(SELECT CONCAT('PLAIN', password)
+		    FROM account, domain
+		    WHERE account.name = sp_acname AND domain.name = sp_acdomain AND domain.active = TRUE
+			    AND account.domain_id = domain.id AND account.active = TRUE AND account.password_enabled = TRUE);
+    END;$$
+    LANGUAGE plpgsql;
+
+
