@@ -208,3 +208,45 @@ CREATE FUNCTION sasl_getpass(sp_name TEXT) RETURNS TEXT AS $$
     LANGUAGE plpgsql;
 
 
+CREATE FUNCTION VALUE_OR_DEFAULT(sp_var BOOLEAN) RETURNS TEXT AS $$
+    BEGIN
+        IF (sp_var IS NOT NULL) THEN
+            IF (sp_var = TRUE) THEN
+                RETURN('TRUE');
+            ELSE
+                RETURN('FALSE');
+            END IF;
+        ELSE
+            RETURN('DEFAULT');
+        END IF;
+    END;$$
+    LANGUAGE plpgsql;
+
+
+CREATE EXTENSION "uuid-ossp";
+
+CREATE FUNCTION account_add(sp_domain TEXT, sp_name TEXT, sp_password TEXT, sp_fullname TEXT,
+    sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID AS $$
+    BEGIN
+        IF (sp_domain IS NULL) THEN
+			SELECT d.name INTO sp_domain FROM tab_defaults td, domain d
+				WHERE td.tab_name = 'domain' AND d.id = td.tab_id;
+		END IF;
+		IF (sp_domain IS NULL) THEN
+            RAISE 'Domain isn''t specified (no default exists)' USING
+                HINT = 'Please set up a default domain in `tab_defaults`';
+        END IF;
+        IF (NOT EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_domain))) THEN
+            RAISE 'Domain % not found', sp_domain;
+        END IF;
+        IF (EXISTS(SELECT * FROM account WHERE lower(name) = lower(sp_name) AND domain_id =
+			(SELECT id FROM domain WHERE lower(name) = lower(sp_domain)))) THEN
+			RAISE 'The account %@% already exists', sp_name, sp_domain;
+		END IF;
+		EXECUTE FORMAT('INSERT INTO account(domain_id, name, password, fullname, spooldir, created, modified, active, public,'
+		                    'password_enabled, ad_sync_enabled)'
+			                'VALUES((SELECT id FROM domain WHERE lower(name) = lower(sp_domain)), sp_name, sp_password, sp_fullname,'
+				            'CONCAT(UUID_GENERATE_V1(), ''/''), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,'
+				            '%s, %s, TRUE, FALSE);', VALUE_OR_DEFAULT(sp_active), VALUE_OR_DEFAULT(sp_public));
+	    END;$$
+	    LANGUAGE plpgsql;
