@@ -4,7 +4,7 @@ CREATE DATABASE emailmgr ENCODING = 'UTF8' LC_COLLATE = 'en_US.UTF-8' LC_CTYPE =
 
 CREATE TABLE domain (
 	id SERIAL PRIMARY KEY,
-	name TEXT NOT NULL UNIQUE,
+	name TEXT NOT NULL,
 	spooldir TEXT NOT NULL UNIQUE,
 	created TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	modified TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -13,6 +13,8 @@ CREATE TABLE domain (
 	ad_guid BYTEA DEFAULT NULL UNIQUE,
 	ad_sync_enabled BOOLEAN NOT NULL DEFAULT TRUE
 	);
+
+CREATE UNIQUE INDEX idx_domain_name_lower ON domain(lower(name));
 
 
 CREATE TABLE account (
@@ -32,22 +34,25 @@ CREATE TABLE account (
 	ad_sync_enabled BOOLEAN NOT NULL DEFAULT TRUE,
 	ad_sync_required BOOLEAN NOT NULL DEFAULT FALSE,
 	ad_time_changed BYTEA DEFAULT NULL,
-	CONSTRAINT name_domain UNIQUE (name, domain_id),
 	CONSTRAINT fk_domain_id FOREIGN KEY (domain_id) REFERENCES domain(id)
 	);
 
-CREATE INDEX idx_account_fullname ON account(fullname);
 CREATE INDEX idx_account_domain_id ON account(domain_id);
+CREATE UNIQUE INDEX idx_account_fullname_lower ON account(lower(fullname));
+CREATE UNIQUE INDEX idx_account_name_domain_lower ON account(lower(name), domain_id);
+
 
 CREATE TABLE alias_name (
     id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
     fullname TEXT DEFAULT NULL,
     created TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	modified TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	active BOOLEAN NOT NULL DEFAULT TRUE,
 	public BOOLEAN NOT NULL DEFAULT FALSE
     );
+
+CREATE UNIQUE INDEX idx_alias_name_name_lower ON alias_name(lower(name));
 
 
 CREATE TABLE alias_value (
@@ -57,9 +62,10 @@ CREATE TABLE alias_value (
     created TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	modified TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	active BOOLEAN NOT NULL DEFAULT TRUE,
-	CONSTRAINT name_value UNIQUE (name_id, value),
 	CONSTRAINT fk_alias_name_id FOREIGN KEY (name_id) REFERENCES alias_name(id) ON DELETE CASCADE
     );
+
+CREATE UNIQUE INDEX idx_alias_value_name_value ON alias_value(name_id, lower(value));
 
 
 CREATE TABLE sysinfo (
@@ -116,15 +122,15 @@ CREATE FUNCTION GetAccountSpoolDir(sp_name TEXT, sp_caller client_proto) RETURNS
     BEGIN
         IF (sp_acdomain IS NULL) THEN
             SELECT name FROM domain INTO sp_acdomain WHERE id = (SELECT tab_id FROM tab_defaults WHERE tab_name = 'domain');
-        END IF;
+        END IF; -- We don't need locking here coz changing defaults while this function is in progress won't hurt anything
         IF (sp_caller = 'pop' OR sp_caller = 'imap') THEN
-            UPDATE account SET accessed = CURRENT_TIMESTAMP WHERE name = sp_acname AND active = TRUE AND
-			    domain_id = (SELECT id FROM domain WHERE name = sp_acdomain AND active = TRUE);
+            UPDATE account SET accessed = CURRENT_TIMESTAMP WHERE lower(name) = lower(sp_acname) AND active = TRUE AND
+			    domain_id = (SELECT id FROM domain WHERE lower(name) = lower(sp_acdomain) AND active = TRUE);
 	    END IF;
 	    RETURN
 	        (SELECT CONCAT(domain.spooldir, '/', account.spooldir)
 	            FROM account, domain
-		        WHERE account.name = sp_acname AND account.active = TRUE AND domain.name = sp_acdomain AND
+		        WHERE lower(account.name) = lower(sp_acname) AND account.active = TRUE AND lower(domain.name) = lower(sp_acdomain) AND
 		            domain.active = TRUE AND account.domain_id = domain.id);
     END;$$
     LANGUAGE plpgsql;
@@ -137,6 +143,7 @@ CREATE FUNCTION GetFullSysName() RETURNS TEXT AS $$
         vminor TEXT;
         vpatch TEXT;
     BEGIN
+        LOCK TABLE sysinfo IN SHARE MODE; -- We do need a shared lock here coz we're selecting several rows from a table
         SELECT pvalue INTO sysname FROM sysinfo WHERE pname = 'sysname';
 		SELECT pvalue INTO vmajor FROM sysinfo WHERE pname = 'vmajor';
 		SELECT pvalue INTO vminor FROM sysinfo WHERE pname = 'vminor';
@@ -146,13 +153,14 @@ CREATE FUNCTION GetFullSysName() RETURNS TEXT AS $$
 	LANGUAGE plpgsql;
 
 
-CREATE FUNCTION get_apache_digauth(sp_name TEXT, sp_realm TEXT) RETURNS TEXT AS $$
+CREATE FUNCTION GetApacheDigAuth(sp_name TEXT, sp_realm TEXT) RETURNS TEXT AS $$
     BEGIN
         RETURN
             (SELECT MD5(CONCAT(sp_name, ':', sp_realm, ':', account.password))
                 FROM account, domain
-		        WHERE domain.active = 1 AND account.name = sp_name AND domain.name = sp_realm AND
-			        account.domain_id = domain.id AND account.active = 1);
+		        WHERE domain.active = TRUE AND lower(account.name) = lower(sp_name) AND
+		            lower(domain.name) = lower(sp_realm) AND
+			        account.domain_id = domain.id AND account.active = TRUE);
 	END;$$
 	LANGUAGE plpgsql;
 
@@ -170,9 +178,10 @@ CREATE FUNCTION sasl_getlogin(sp_name TEXT) RETURNS TEXT AS $$
 		END IF;
 		SELECT CONCAT(account.name, '@', domain.name) INTO sp_logins
 		    FROM account, domain
-		    WHERE account.name = sp_acname AND account.active = TRUE AND domain.name = sp_acdomain AND
-		        domain.active = TRUE AND account.domain_id = domain.id;
-		IF (sp_logins IS NOT NULL AND sp_acdomain = sp_defaultdomain) THEN
+		    WHERE lower(account.name) = lower(sp_acname) AND account.active = TRUE AND
+		        lower(domain.name) = lower(sp_acdomain) AND domain.active = TRUE AND
+		        account.domain_id = domain.id;
+		IF (sp_logins IS NOT NULL AND lower(sp_acdomain) = lower(sp_defaultdomain)) THEN
 		    sp_logins = CONCAT(sp_logins, ',', GetNamePart(sp_logins, '@', 'name'));
 	    END IF;
 	    RETURN(sp_logins);
@@ -192,8 +201,9 @@ CREATE FUNCTION sasl_getpass(sp_name TEXT) RETURNS TEXT AS $$
 		END IF;
 		RETURN(SELECT CONCAT('PLAIN', password)
 		    FROM account, domain
-		    WHERE account.name = sp_acname AND domain.name = sp_acdomain AND domain.active = TRUE
-			    AND account.domain_id = domain.id AND account.active = TRUE AND account.password_enabled = TRUE);
+		    WHERE lower(account.name) = lower(sp_acname) AND lower(domain.name) = lower(sp_acdomain) AND
+		        domain.active = TRUE AND account.domain_id = domain.id AND account.active = TRUE AND
+		        account.password_enabled = TRUE);
     END;$$
     LANGUAGE plpgsql;
 
