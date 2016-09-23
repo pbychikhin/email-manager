@@ -225,12 +225,12 @@ CREATE FUNCTION VALUE_OR_DEFAULT(sp_var BOOLEAN) RETURNS TEXT AS $$
 
 CREATE FUNCTION GetDomain(sp_domain TEXT) RETURNS RECORD AS $$
     DECLARE
-        sp_domain_id domain.id%TYPE DEFAULT NULL;
-        sp_domain_name domain.name%TYPE DEFAULT NULL;
+        sp_domain_id INTEGER DEFAULT NULL;
+        sp_domain_name TEXT DEFAULT NULL;
     BEGIN
         IF (sp_domain IS NULL) THEN
             SELECT d.id, d.name INTO sp_domain_id, sp_domain_name FROM tab_defaults td, domain d
-                WHERE td.tab_name = 'domain' AND d.id = td.tab_id FOR SHARE OF domain;
+                WHERE td.tab_name = 'domain' AND d.id = td.tab_id FOR SHARE OF d;
             IF (sp_domain_id IS NULL) THEN
                 RAISE 'Domain isn''t specified (no default exists)' USING
                     HINT = 'Please set up a default domain in `tab_defaults`';
@@ -252,22 +252,37 @@ CREATE FUNCTION GetDomain(sp_domain TEXT) RETURNS RECORD AS $$
 
 CREATE EXTENSION "uuid-ossp";
 
+
+CREATE FUNCTION domain_add(sp_name TEXT, sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID AS $$
+    BEGIN
+        LOCK TABLE domain IN SHARE ROW EXCLUSIVE MODE;
+		IF (EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_name))) THEN
+		    RAISE 'The domain % already exists', sp_name;
+		END IF;
+		EXECUTE FORMAT('INSERT INTO domain(name, spooldir, created, modified, active, public, ad_sync_enabled) '
+                    'VALUES ($1, UUID_GENERATE_V1(), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '
+                    '%s, %s, FALSE);',  VALUE_OR_DEFAULT(sp_active), VALUE_OR_DEFAULT(sp_public)) USING sp_name;
+	END;$$
+	LANGUAGE plpgsql;
+
+
 CREATE FUNCTION account_add(sp_domain TEXT, sp_name TEXT, sp_password TEXT, sp_fullname TEXT,
     sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID AS $$
     DECLARE
-        sp_domain_id domain.id%TYPE;
-        sp_domain_name domain.name%TYPE;
+        sp_domain_id INTEGER DEFAULT NULL;
+        sp_domain_name TEXT DEFAULT NULL;
     BEGIN
-        SELECT GetDomain(sp_domain) INTO sp_domain_id, sp_domain_name;
+        SELECT * FROM GetDomain(sp_domain) AS (id INTEGER, name TEXT) INTO sp_domain_id, sp_domain_name;
         LOCK TABLE account IN SHARE ROW EXCLUSIVE MODE; -- We need locking because after checking for existence we have to rely on results of that check
         IF (EXISTS(SELECT * FROM account WHERE lower(name) = lower(sp_name) AND domain_id = sp_domain_id)) THEN
 			RAISE 'The account %@% already exists', sp_name, sp_domain_name;
 		END IF;
-		EXECUTE FORMAT('INSERT INTO account(domain_id, name, password, fullname, spooldir, created, modified, active, public,'
-		                    'password_enabled, ad_sync_enabled)'
-			                'VALUES(sp_domain_id, sp_name, sp_password, sp_fullname,'
-				            'CONCAT(UUID_GENERATE_V1(), ''/''), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,'
-				            '%s, %s, TRUE, FALSE);', VALUE_OR_DEFAULT(sp_active), VALUE_OR_DEFAULT(sp_public));
+		EXECUTE FORMAT('INSERT INTO account(domain_id, name, password, fullname, spooldir, created, modified, active, public, '
+		                    'password_enabled, ad_sync_enabled) '
+			                'VALUES ($1, $2, $3, $4, '
+				            'CONCAT(UUID_GENERATE_V1(), ''/''), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '
+				            '%s, %s, TRUE, FALSE);', VALUE_OR_DEFAULT(sp_active), VALUE_OR_DEFAULT(sp_public)) USING
+				            sp_domain_id, sp_name, sp_password, sp_fullname;
 	    END;$$
 	    LANGUAGE plpgsql;
 
@@ -277,7 +292,7 @@ CREATE FUNCTION account_del(sp_domain TEXT, sp_name TEXT) RETURNS VOID AS $$
         sp_domain_id domain.id%TYPE;
         sp_domain_name domain.name%TYPE;
     BEGIN
-        SELECT GetDomain(sp_domain) INTO sp_domain_id, sp_domain_name;
+        SELECT * FROM GetDomain(sp_domain) AS (id INTEGER, name TEXT) INTO sp_domain_id, sp_domain_name;;
 		IF (NOT EXISTS(SELECT * FROM account WHERE lower(name) = lower(sp_name) AND
 			domain_id = sp_domain_id FOR UPDATE)) THEN
 			RAISE 'The account %@% does not exist', sp_name, sp_domain_name;
@@ -303,7 +318,7 @@ CREATE FUNCTION account_mod(sp_domain TEXT, sp_name TEXT, sp_newname TEXT, sp_pa
         sp_domain_id domain.id%TYPE;
         sp_domain_name domain.name%TYPE;
     BEGIN
-        SELECT GetDomain(sp_domain) INTO sp_domain_id, sp_domain_name;
+        SELECT * FROM GetDomain(sp_domain) AS (id INTEGER, name TEXT) INTO sp_domain_id, sp_domain_name;;
 		IF (COALESCE(sp_newname, sp_password, sp_password_enabled, sp_fullname, sp_active, sp_public,
 			sp_ad_sync_enabled) IS NULL) THEN
 			RAISE 'Nothing to change';
