@@ -121,8 +121,8 @@ CREATE FUNCTION GetAccountSpoolDir(sp_name TEXT, sp_caller client_proto) RETURNS
         sp_acdomain TEXT DEFAULT GetNamePart(sp_name, '@', 'domain');
     BEGIN
         IF (sp_acdomain IS NULL) THEN
-            SELECT name FROM domain INTO sp_acdomain WHERE id = (SELECT tab_id FROM tab_defaults WHERE tab_name = 'domain');
-        END IF; -- We don't need locking here coz changing defaults while this function is in progress won't hurt anything
+            SELECT name FROM domain INTO sp_acdomain WHERE id = (SELECT tab_id FROM tab_defaults WHERE tab_name = 'domain') FOR SHARE;
+        END IF;
         IF (sp_caller = 'pop' OR sp_caller = 'imap') THEN
             UPDATE account SET accessed = CURRENT_TIMESTAMP WHERE lower(name) = lower(sp_acname) AND active = TRUE AND
 			    domain_id = (SELECT id FROM domain WHERE lower(name) = lower(sp_acdomain) AND active = TRUE);
@@ -170,7 +170,7 @@ CREATE FUNCTION sasl_getlogin(sp_name TEXT) RETURNS TEXT AS $$
         sp_acname TEXT DEFAULT GetNamePart(sp_name, '@', 'name');
         sp_acdomain TEXT DEFAULT GetNamePart(sp_name, '@', 'domain');
         sp_defaultdomain TEXT DEFAULT (SELECT name FROM domain WHERE id = (SELECT tab_id
-		    FROM tab_defaults WHERE tab_name = 'domain'));
+		    FROM tab_defaults WHERE tab_name = 'domain') FOR SHARE);
 		sp_logins TEXT DEFAULT NULL;
     BEGIN
         IF (sp_acname IS NULL OR sp_acdomain IS NULL) THEN
@@ -197,7 +197,7 @@ CREATE FUNCTION sasl_getpass(sp_name TEXT) RETURNS TEXT AS $$
         IF (sp_acdomain IS NULL) THEN
         	SELECT name INTO sp_acdomain
 		        FROM domain
-		        WHERE id = (SELECT tab_id FROM tab_defaults WHERE tab_name = 'domain');
+		        WHERE id = (SELECT tab_id FROM tab_defaults WHERE tab_name = 'domain') FOR SHARE;
 		END IF;
 		RETURN(SELECT CONCAT('PLAIN', password)
 		    FROM account, domain
@@ -223,30 +223,115 @@ CREATE FUNCTION VALUE_OR_DEFAULT(sp_var BOOLEAN) RETURNS TEXT AS $$
     LANGUAGE plpgsql;
 
 
+CREATE FUNCTION GetDomain(sp_domain TEXT) RETURNS RECORD AS $$
+    DECLARE
+        sp_domain_id domain.id%TYPE DEFAULT NULL;
+        sp_domain_name domain.name%TYPE DEFAULT NULL;
+    BEGIN
+        IF (sp_domain IS NULL) THEN
+            SELECT d.id, d.name INTO sp_domain_id, sp_domain_name FROM tab_defaults td, domain d
+                WHERE td.tab_name = 'domain' AND d.id = td.tab_id FOR SHARE OF domain;
+            IF (sp_domain_id IS NULL) THEN
+                RAISE 'Domain isn''t specified (no default exists)' USING
+                    HINT = 'Please set up a default domain in `tab_defaults`';
+            END IF;
+        ELSE
+            SELECT d.id, d.name INTO sp_domain_id, sp_domain_name FROM domain d WHERE
+                lower(name) = lower(sp_domain) FOR SHARE;
+            IF (sp_domain_id IS NULL) THEN
+                RAISE 'Domain % not found', sp_domain;
+            END IF;
+        END IF;
+        IF (lower(sp_domain) = lower(sp_domain_name)) THEN
+            sp_domain_name = sp_domain; -- We should not change the string case when it is returned to a user
+        END IF;
+        RETURN(sp_domain_id, sp_domain_name);
+    END;$$
+    LANGUAGE plpgsql;
+
+
 CREATE EXTENSION "uuid-ossp";
 
 CREATE FUNCTION account_add(sp_domain TEXT, sp_name TEXT, sp_password TEXT, sp_fullname TEXT,
     sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID AS $$
+    DECLARE
+        sp_domain_id domain.id%TYPE;
+        sp_domain_name domain.name%TYPE;
     BEGIN
-        IF (sp_domain IS NULL) THEN
-			SELECT d.name INTO sp_domain FROM tab_defaults td, domain d
-				WHERE td.tab_name = 'domain' AND d.id = td.tab_id;
-		END IF;
-		IF (sp_domain IS NULL) THEN
-            RAISE 'Domain isn''t specified (no default exists)' USING
-                HINT = 'Please set up a default domain in `tab_defaults`';
-        END IF;
-        IF (NOT EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_domain))) THEN
-            RAISE 'Domain % not found', sp_domain;
-        END IF;
-        IF (EXISTS(SELECT * FROM account WHERE lower(name) = lower(sp_name) AND domain_id =
-			(SELECT id FROM domain WHERE lower(name) = lower(sp_domain)))) THEN
-			RAISE 'The account %@% already exists', sp_name, sp_domain;
+        SELECT GetDomain(sp_domain) INTO sp_domain_id, sp_domain_name;
+        LOCK TABLE account IN SHARE ROW EXCLUSIVE MODE; -- We need locking because after checking for existence we have to rely on results of that check
+        IF (EXISTS(SELECT * FROM account WHERE lower(name) = lower(sp_name) AND domain_id = sp_domain_id)) THEN
+			RAISE 'The account %@% already exists', sp_name, sp_domain_name;
 		END IF;
 		EXECUTE FORMAT('INSERT INTO account(domain_id, name, password, fullname, spooldir, created, modified, active, public,'
 		                    'password_enabled, ad_sync_enabled)'
-			                'VALUES((SELECT id FROM domain WHERE lower(name) = lower(sp_domain)), sp_name, sp_password, sp_fullname,'
+			                'VALUES(sp_domain_id, sp_name, sp_password, sp_fullname,'
 				            'CONCAT(UUID_GENERATE_V1(), ''/''), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,'
 				            '%s, %s, TRUE, FALSE);', VALUE_OR_DEFAULT(sp_active), VALUE_OR_DEFAULT(sp_public));
 	    END;$$
 	    LANGUAGE plpgsql;
+
+
+CREATE FUNCTION account_del(sp_domain TEXT, sp_name TEXT) RETURNS VOID AS $$
+    DECLARE
+        sp_domain_id domain.id%TYPE;
+        sp_domain_name domain.name%TYPE;
+    BEGIN
+        SELECT GetDomain(sp_domain) INTO sp_domain_id, sp_domain_name;
+		IF (NOT EXISTS(SELECT * FROM account WHERE lower(name) = lower(sp_name) AND
+			domain_id = sp_domain_id FOR UPDATE)) THEN
+			RAISE 'The account %@% does not exist', sp_name, sp_domain_name;
+		END IF;
+		DELETE FROM account WHERE lower(name) = lower(sp_name) AND
+		    domain_id = sp_domain_id;
+	END;$$
+	LANGUAGE plpgsql;
+
+
+CREATE FUNCTION account_mod(sp_domain TEXT, sp_name TEXT, sp_newname TEXT, sp_password TEXT, sp_fullname TEXT,
+                    sp_active BOOLEAN, sp_public BOOLEAN, sp_password_enabled BOOLEAN, sp_ad_sync_enabled BOOLEAN)
+                    RETURNS VOID AS $$
+    DECLARE
+        old_name TEXT;
+        old_password TEXT;
+        old_fullname TEXT;
+        old_active BOOLEAN;
+        old_public BOOLEAN;
+        old_password_enabled BOOLEAN;
+        old_ad_sync_enabled BOOLEAN;
+        old_ad_sync_required BOOLEAN;
+        sp_domain_id domain.id%TYPE;
+        sp_domain_name domain.name%TYPE;
+    BEGIN
+        SELECT GetDomain(sp_domain) INTO sp_domain_id, sp_domain_name;
+		IF (COALESCE(sp_newname, sp_password, sp_password_enabled, sp_fullname, sp_active, sp_public,
+			sp_ad_sync_enabled) IS NULL) THEN
+			RAISE 'Nothing to change';
+		END IF;
+		IF (NOT EXISTS(SELECT * FROM account WHERE lower(name) = lower(sp_name) AND
+			domain_id = sp_domain_id FOR UPDATE)) THEN
+			RAISE 'The account %@% does not exist', sp_name, sp_domain_name;
+		END IF;
+		IF (lower(sp_name) <> lower(sp_newname) AND EXISTS(SELECT * FROM account WHERE name = sp_newname AND
+		    domain_id = sp_domain_id)) THEN
+		    RAISE 'The account %@% already exists', sp_newname, sp_domain_name; -- Cannot rename to an existing one
+		END IF;
+		SELECT name, password, password_enabled, fullname, active, public, ad_sync_enabled, ad_sync_required
+			INTO old_name, old_password, old_password_enabled, old_fullname, old_active, old_public,
+				old_ad_sync_enabled, old_ad_sync_required
+			FROM account WHERE lower(name) = lower(sp_name) AND domain_id = sp_domain_id;
+		UPDATE account SET
+			name = COALESCE(sp_newname, old_name),
+			password = COALESCE(sp_password, old_password),
+			fullname = COALESCE(sp_fullname, old_fullname),
+			active = COALESCE(sp_active, old_active),
+			public = COALESCE(sp_public, old_public),
+			password_enabled = COALESCE(sp_password_enabled, old_password_enabled),
+			ad_sync_enabled = COALESCE(sp_ad_sync_enabled, old_ad_sync_enabled),
+			ad_sync_required = CASE
+			    WHEN sp_ad_sync_enabled = TRUE AND sp_ad_sync_enabled <> old_ad_sync_enabled THEN TRUE
+				ELSE old_ad_sync_required END,
+			modified = CURRENT_TIMESTAMP
+			WHERE name = sp_name AND domain_id = (SELECT id FROM domain WHERE name = sp_domain);
+	END;$$
+	LANGUAGE plpgsql;
