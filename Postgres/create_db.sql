@@ -266,6 +266,51 @@ CREATE FUNCTION domain_add(sp_name TEXT, sp_active BOOLEAN, sp_public BOOLEAN) R
 	LANGUAGE plpgsql;
 
 
+CREATE FUNCTION domain_del(sp_name TEXT) RETURNS VOID AS $$
+    BEGIN
+		IF (NOT EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_name) FOR UPDATE)) THEN
+		    RAISE 'The domain % does not exist', sp_name;
+		END IF;
+		IF (EXISTS(SELECT * FROM account WHERE domain_id = (SELECT id FROM domain WHERE lower(name) = lower(sp_name)))) THEN
+            RAISE 'The domain % still has linked accounts', sp_name USING
+                HINT = 'Please delete all linked accounts one by one before deleting a domain';
+		END IF;
+		DELETE FROM domain WHERE lower(name) = lower(sp_name);
+	END;$$
+	LANGUAGE plpgsql;
+
+
+CREATE FUNCTION domain_mod(sp_name TEXT, sp_newname TEXT, sp_active BOOLEAN, sp_public BOOLEAN,
+    sp_ad_sync_enabled BOOLEAN) RETURNS VOID AS $$
+    DECLARE
+        DECLARE old_name TEXT;
+        DECLARE old_active BOOLEAN;
+        DECLARE old_public BOOLEAN;
+        DECLARE old_ad_sync_enabled BOOLEAN;
+    BEGIN
+        IF (COALESCE(sp_newname, sp_active, sp_public, sp_ad_sync_enabled) IS NULL) THEN
+            RAISE 'Nothing to change';
+		END IF;
+		IF (NOT EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_name) FOR UPDATE)) THEN
+		    RAISE 'The domain % does not exist', sp_name;
+		END IF;
+		IF (lower(sp_name) <> lower(sp_newname) AND
+		    EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_newname))) THEN
+		    RAISE 'The domain % already exists', sp_newname;
+		END IF;
+		SELECT name, active, public, ad_sync_enabled INTO old_name, old_active, old_public, old_ad_sync_enabled
+			FROM domain WHERE lower(name) = lower(sp_name);
+		UPDATE domain SET
+			name = COALESCE(sp_newname, old_name),
+			active = COALESCE(sp_active, old_active),
+			public = COALESCE(sp_public, old_public),
+			ad_sync_enabled = COALESCE(sp_ad_sync_enabled, old_ad_sync_enabled),
+			modified = CURRENT_TIMESTAMP
+			WHERE lower(name) = lower(sp_name);
+    END;$$
+    LANGUAGE plpgsql;
+
+
 CREATE FUNCTION account_add(sp_domain TEXT, sp_name TEXT, sp_password TEXT, sp_fullname TEXT,
     sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID AS $$
     DECLARE
@@ -289,10 +334,10 @@ CREATE FUNCTION account_add(sp_domain TEXT, sp_name TEXT, sp_password TEXT, sp_f
 
 CREATE FUNCTION account_del(sp_domain TEXT, sp_name TEXT) RETURNS VOID AS $$
     DECLARE
-        sp_domain_id domain.id%TYPE;
-        sp_domain_name domain.name%TYPE;
+        sp_domain_id INTEGER DEFAULT NULL;
+        sp_domain_name TEXT DEFAULT NULL;
     BEGIN
-        SELECT * FROM GetDomain(sp_domain) AS (id INTEGER, name TEXT) INTO sp_domain_id, sp_domain_name;;
+        SELECT * FROM GetDomain(sp_domain) AS (id INTEGER, name TEXT) INTO sp_domain_id, sp_domain_name;
 		IF (NOT EXISTS(SELECT * FROM account WHERE lower(name) = lower(sp_name) AND
 			domain_id = sp_domain_id FOR UPDATE)) THEN
 			RAISE 'The account %@% does not exist', sp_name, sp_domain_name;
@@ -315,10 +360,10 @@ CREATE FUNCTION account_mod(sp_domain TEXT, sp_name TEXT, sp_newname TEXT, sp_pa
         old_password_enabled BOOLEAN;
         old_ad_sync_enabled BOOLEAN;
         old_ad_sync_required BOOLEAN;
-        sp_domain_id domain.id%TYPE;
-        sp_domain_name domain.name%TYPE;
+        sp_domain_id INTEGER DEFAULT NULL;
+        sp_domain_name TEXT DEFAULT NULL;
     BEGIN
-        SELECT * FROM GetDomain(sp_domain) AS (id INTEGER, name TEXT) INTO sp_domain_id, sp_domain_name;;
+        SELECT * FROM GetDomain(sp_domain) AS (id INTEGER, name TEXT) INTO sp_domain_id, sp_domain_name;
 		IF (COALESCE(sp_newname, sp_password, sp_password_enabled, sp_fullname, sp_active, sp_public,
 			sp_ad_sync_enabled) IS NULL) THEN
 			RAISE 'Nothing to change';
