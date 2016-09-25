@@ -255,7 +255,7 @@ CREATE EXTENSION "uuid-ossp";
 
 CREATE FUNCTION domain_add(sp_name TEXT, sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID AS $$
     BEGIN
-        LOCK TABLE domain IN SHARE ROW EXCLUSIVE MODE;
+        LOCK TABLE domain IN SHARE ROW EXCLUSIVE MODE; -- We need locking because after checking for existence we have to rely on results of that check
 		IF (EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_name))) THEN
 		    RAISE 'The domain % already exists', sp_name;
 		END IF;
@@ -395,3 +395,28 @@ CREATE FUNCTION account_mod(sp_domain TEXT, sp_name TEXT, sp_newname TEXT, sp_pa
 			WHERE name = sp_name AND domain_id = (SELECT id FROM domain WHERE name = sp_domain);
 	END;$$
 	LANGUAGE plpgsql;
+
+
+CREATE FUNCTION alias_add(sp_name TEXT, sp_value TEXT, sp_fullname TEXT, sp_active BOOLEAN, sp_public BOOLEAN)
+    RETURNS VOID AS $$
+    DECLARE
+        new_alias_name_created BOOLEAN DEFAULT FALSE;
+    BEGIN
+        LOCK TABLE alias_name, alias_value IN SHARE ROW EXCLUSIVE MODE;
+		IF (EXISTS(SELECT * FROM alias_value WHERE lower(value) = lower(sp_value) AND name_id =
+                (SELECT id FROM alias_name WHERE lower(name) = lower(sp_name)))) THEN
+            RAISE 'An alias % for name % already exists', sp_name, sp_value;
+		END IF;
+		IF (NOT EXISTS(SELECT * FROM alias_name WHERE name = sp_name)) THEN
+			EXECUTE FORMAT('INSERT INTO alias_name(name, fullname, created, modified, active, public) '
+			    'VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s, %s);',
+			    VALUE_OR_DEFAULT(sp_active), VALUE_OR_DEFAULT(sp_public)) USING sp_name, sp_fullname;
+			new_alias_name_created = TRUE;
+		END IF;
+		EXECUTE FORMAT('INSERT INTO alias_value(name_id, value, created, modified, active) '
+		    'VALUES($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s);',
+			CASE WHEN sp_active IS NOT NULL AND new_alias_name_created = FALSE THEN QUOTE_LITERAL(sp_active)
+			    ELSE 'DEFAULT' END)
+			USING (SELECT id FROM alias_name WHERE lower(name) = lower(sp_name)), sp_value;
+    END;$$
+    LANGUAGE plpgsql;

@@ -1,10 +1,10 @@
 # Steps of the project
 
 * Deploy the AD
-    * Deploy first Windows standard server
-    * Deploy second Windows standard server
-    * Promote the first host to an AD controller
-    * Promote the second host to a second AD controller in the existing forest
+    * **\[done\]** Deploy first Windows standard server
+    * **\[done\]** Deploy second Windows standard server
+    * **\[done\]** Promote the first host to an AD controller
+    * **\[done\]** Promote the second host to a second AD controller in the existing forest
 
 * Deploy a database host and email server
     * **\[done\]** Deploy Linux CentOS
