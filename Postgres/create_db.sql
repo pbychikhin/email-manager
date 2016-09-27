@@ -1,5 +1,15 @@
 
+DROP DATABASE IF EXISTS emailmgr;
 CREATE DATABASE emailmgr ENCODING = 'UTF8' LC_COLLATE = 'en_US.UTF-8' LC_CTYPE = 'en_US.UTF-8';
+
+\c emailmgr
+
+DROP ROLE IF EXISTS emailmgr_writer, emailmgr_reader;
+
+CREATE ROLE emailmgr_writer;
+CREATE ROLE emailmgr_reader;
+
+GRANT CONNECT ON DATABASE emailmgr TO emailmgr_writer, emailmgr_reader;
 
 
 CREATE TABLE domain (
@@ -123,7 +133,7 @@ CREATE FUNCTION GetAccountSpoolDir(sp_name TEXT, sp_caller client_proto) RETURNS
         IF (sp_acdomain IS NULL) THEN
             SELECT name FROM domain INTO sp_acdomain WHERE id = (SELECT tab_id FROM tab_defaults WHERE tab_name = 'domain') FOR SHARE;
         END IF;
-        IF (sp_caller = 'pop' OR sp_caller = 'imap') THEN
+        IF (sp_caller IN ('imap', 'pop')) THEN
             UPDATE account SET accessed = CURRENT_TIMESTAMP WHERE lower(name) = lower(sp_acname) AND active = TRUE AND
 			    domain_id = (SELECT id FROM domain WHERE lower(name) = lower(sp_acdomain) AND active = TRUE);
 	    END IF;
@@ -134,6 +144,9 @@ CREATE FUNCTION GetAccountSpoolDir(sp_name TEXT, sp_caller client_proto) RETURNS
 		            domain.active = TRUE AND account.domain_id = domain.id);
     END;$$
     LANGUAGE plpgsql;
+
+ALTER FUNCTION GetAccountSpoolDir(TEXT, client_proto) OWNER TO emailmgr_writer;
+ALTER FUNCTION GetAccountSpoolDir(TEXT, client_proto) SECURITY DEFINER;
 
 
 CREATE FUNCTION GetFullSysName() RETURNS TEXT AS $$
@@ -405,9 +418,9 @@ CREATE FUNCTION alias_add(sp_name TEXT, sp_value TEXT, sp_fullname TEXT, sp_acti
         LOCK TABLE alias_name, alias_value IN SHARE ROW EXCLUSIVE MODE;
 		IF (EXISTS(SELECT * FROM alias_value WHERE lower(value) = lower(sp_value) AND name_id =
                 (SELECT id FROM alias_name WHERE lower(name) = lower(sp_name)))) THEN
-            RAISE 'An alias % for name % already exists', sp_name, sp_value;
+            RAISE 'The alias % referencing % already exists', sp_name, sp_value;
 		END IF;
-		IF (NOT EXISTS(SELECT * FROM alias_name WHERE name = sp_name)) THEN
+		IF (NOT EXISTS(SELECT * FROM alias_name WHERE lower(name) = lower(sp_name))) THEN
 			EXECUTE FORMAT('INSERT INTO alias_name(name, fullname, created, modified, active, public) '
 			    'VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s, %s);',
 			    VALUE_OR_DEFAULT(sp_active), VALUE_OR_DEFAULT(sp_public)) USING sp_name, sp_fullname;
@@ -420,3 +433,93 @@ CREATE FUNCTION alias_add(sp_name TEXT, sp_value TEXT, sp_fullname TEXT, sp_acti
 			USING (SELECT id FROM alias_name WHERE lower(name) = lower(sp_name)), sp_value;
     END;$$
     LANGUAGE plpgsql;
+
+
+CREATE FUNCTION alias_del(sp_name TEXT, sp_value TEXT) RETURNS VOID AS $$
+    BEGIN
+		IF (sp_value IS NULL) THEN
+			IF (NOT EXISTS(SELECT * FROM alias_name WHERE lower(name) = lower(sp_name) FOR UPDATE)) THEN
+				RAISE 'The alias % does not exist', sp_name;
+			END IF;
+			DELETE FROM alias_name WHERE lower(name) = lower(sp_name);
+		ELSE
+			IF (NOT EXISTS(SELECT * FROM alias_value WHERE lower(value) = lower(sp_value) AND
+				name_id = (SELECT id FROM alias_name WHERE lower(name) = lower(sp_name) FOR UPDATE) FOR UPDATE)) THEN
+				RAISE 'The alias % does not reference %', sp_name, sp_value;
+			END IF;
+			DELETE FROM alias_value WHERE lower(value) = lower(sp_value) AND name_id = (SELECT id FROM alias_name
+				WHERE lower(name) = lower(sp_name));
+			IF (NOT EXISTS(SELECT * FROM alias_value WHERE name_id = (SELECT id FROM alias_name
+				WHERE lower(name) = lower(sp_name)))) THEN
+				DELETE FROM alias_name WHERE lower(name) = lower(sp_name);
+			END IF;
+		END IF;
+    END;$$
+    LANGUAGE plpgsql;
+
+
+CREATE FUNCTION alias_mod(sp_name TEXT, sp_newname TEXT, sp_value TEXT, sp_newvalue TEXT, sp_fullname TEXT,
+    sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID AS $$
+    DECLARE
+        old_name TEXT;
+        old_value TEXT;
+        old_fullname TEXT;
+        old_active BOOLEAN;
+        old_public BOOLEAN;
+    BEGIN
+		IF (sp_value IS NULL) THEN
+			IF (COALESCE(sp_newname, sp_fullname, sp_active, sp_public) IS NULL) THEN
+				RAISE 'Nothing to change';
+			END IF;
+			IF (NOT EXISTS(SELECT * FROM alias_name WHERE lower(name) = lower(sp_name) FOR UPDATE)) THEN
+				RAISE 'The alias % does not exist', sp_name;
+			END IF;
+			IF (lower(sp_name) <> lower(sp_newname) AND
+			    EXISTS(SELECT * FROM alias_name WHERE lower(name) = lower(sp_newname))) THEN
+                RAISE 'The alias % already exists', sp_newname;
+			END IF;
+			SELECT name, fullname, active, public INTO old_name, old_fullname, old_active, old_public
+				FROM alias_name WHERE lower(name) = lower(sp_name);
+			UPDATE alias_name SET
+				name = COALESCE(sp_newname, old_name),
+				fullname = COALESCE(sp_fullname, old_fullname),
+				active = COALESCE(sp_active, old_active),
+				public = COALESCE(sp_public, old_public),
+				modified = CURRENT_TIMESTAMP
+			    WHERE lower(name) = lower(sp_name);
+	    ELSE
+			IF (COALESCE(sp_newvalue, sp_active) IS NULL) THEN
+				RAISE 'Nothing to change';
+			END IF;
+			IF (NOT EXISTS(SELECT * FROM alias_value WHERE lower(value) = lower(sp_value) AND
+				name_id = (SELECT id FROM alias_name WHERE lower(name) = lower(sp_name) FOR SHARE) FOR UPDATE)) THEN
+				RAISE 'The alias % referencing % does not exist', sp_name, sp_value;
+			END IF;
+			IF (lower(sp_value) <> lower(sp_newvalue) AND EXISTS(SELECT * FROM alias_value
+				WHERE lower(value) = lower(sp_newvalue) AND name_id = (SELECT id FROM alias_name WHERE
+				lower(name) = lower(sp_name)))) THEN
+				RAISE 'The alias % already references %', sp_name, sp_newvalue;
+			END IF;
+			SELECT value, active INTO old_value, old_active FROM alias_value WHERE
+				lower(value) = lower(sp_value) AND
+				name_id = (SELECT id FROM alias_name WHERE lower(name) = lower(sp_name));
+			UPDATE alias_value SET
+				value = COALESCE(sp_newvalue, old_value),
+				active = COALESCE(sp_active, old_active),
+				modified = CURRENT_TIMESTAMP
+			    WHERE lower(value) = lower(sp_value) AND
+			    name_id = (SELECT id FROM alias_name WHERE lower(name) = lower(sp_name));
+        END IF;
+    END;$$
+    LANGUAGE plpgsql;
+
+
+-- Populate table `sysinfo`
+INSERT INTO sysinfo(pname, pvalue) VALUES('sysname', 'emailmgr');
+INSERT INTO sysinfo(pname, pvalue) VALUES('vmajor', '1');
+INSERT INTO sysinfo(pname, pvalue) VALUES('vminor', '0');
+INSERT INTO sysinfo(pname, pvalue) VALUES('vpatch', '0');
+
+-- Populate table `tab_defaults`
+SELECT domain_add('testdomain.org', TRUE, TRUE);
+INSERT INTO tab_defaults(tab_name, tab_id) VALUES('domain', (SELECT MIN(id) FROM domain));
