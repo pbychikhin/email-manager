@@ -2,14 +2,14 @@
 DROP DATABASE IF EXISTS emailmgr;
 CREATE DATABASE emailmgr ENCODING = 'UTF8' LC_COLLATE = 'en_US.UTF-8' LC_CTYPE = 'en_US.UTF-8';
 
+
 \c emailmgr
+
 
 DROP ROLE IF EXISTS emailmgr_writer, emailmgr_reader;
 
 CREATE ROLE emailmgr_writer;
 CREATE ROLE emailmgr_reader;
-
-GRANT CONNECT ON DATABASE emailmgr TO emailmgr_writer, emailmgr_reader;
 
 
 CREATE TABLE domain (
@@ -123,25 +123,40 @@ CREATE FUNCTION GetNamePart(sp_name TEXT, sp_delim TEXT, sp_partname TEXT) RETUR
     LANGUAGE plpgsql;
 
 
+CREATE OR REPLACE FUNCTION CheckTransactionIsolation(sp_action_name TEXT, sp_levels_allowed TEXT[]) RETURNS VOID AS $$
+    -- Unfortunately, the only way to set the isolation level is to perform it outside the function
+    -- So we can only check the current level and stop if it doesn't meet requirements
+    BEGIN
+        IF (NOT (SELECT lower(CURRENT_SETTING('transaction_isolation')) = ANY (sp_levels_allowed))) THEN
+            RAISE 'Cannot % with the current isolation level', sp_action_name USING
+                HINT = FORMAT('Please set the transaction isolation level to %s', array_to_string(sp_levels_allowed, ' or '));
+        END IF;
+    END; $$
+    LANGUAGE plpgsql;
+
+
 CREATE TYPE client_proto AS ENUM ('smtp', 'pop', 'imap');
 
-CREATE FUNCTION GetAccountSpoolDir(sp_name TEXT, sp_caller client_proto) RETURNS TEXT AS $$
+CREATE OR REPLACE FUNCTION GetAccountSpoolDir(sp_name TEXT, sp_caller client_proto) RETURNS TEXT AS $$
     DECLARE
         sp_acname TEXT DEFAULT GetNamePart(sp_name, '@', 'name');
         sp_acdomain TEXT DEFAULT GetNamePart(sp_name, '@', 'domain');
+        sp_domain_id INTEGER DEFAULT NULL;
+        sp_spool_dir TEXT DEFAULT NULL;
     BEGIN
         IF (sp_acdomain IS NULL) THEN
             SELECT name FROM domain INTO sp_acdomain WHERE id = (SELECT tab_id FROM tab_defaults WHERE tab_name = 'domain') FOR SHARE;
         END IF;
+        SELECT id FROM domain INTO sp_domain_id WHERE lower(name) = lower(sp_acdomain) AND active = TRUE FOR SHARE;
+        SELECT CONCAT(domain.spooldir, '/', account.spooldir) FROM account, domain INTO sp_spool_dir WHERE
+            lower(account.name) = lower(sp_acname) AND account.active = TRUE AND
+            domain.id = sp_domain_id AND
+            domain.active = TRUE AND account.domain_id = sp_domain_id FOR SHARE;
         IF (sp_caller IN ('imap', 'pop')) THEN
             UPDATE account SET accessed = CURRENT_TIMESTAMP WHERE lower(name) = lower(sp_acname) AND active = TRUE AND
-			    domain_id = (SELECT id FROM domain WHERE lower(name) = lower(sp_acdomain) AND active = TRUE);
+			    domain_id = sp_domain_id;
 	    END IF;
-	    RETURN
-	        (SELECT CONCAT(domain.spooldir, '/', account.spooldir)
-	            FROM account, domain
-		        WHERE lower(account.name) = lower(sp_acname) AND account.active = TRUE AND lower(domain.name) = lower(sp_acdomain) AND
-		            domain.active = TRUE AND account.domain_id = domain.id);
+	    RETURN(sp_spool_dir);
     END;$$
     LANGUAGE plpgsql;
 
@@ -149,14 +164,15 @@ ALTER FUNCTION GetAccountSpoolDir(TEXT, client_proto) OWNER TO emailmgr_writer;
 ALTER FUNCTION GetAccountSpoolDir(TEXT, client_proto) SECURITY DEFINER;
 
 
-CREATE FUNCTION GetFullSysName() RETURNS TEXT AS $$
+CREATE OR REPLACE FUNCTION GetFullSysName() RETURNS TEXT AS $$
     DECLARE
         sysname TEXT;
         vmajor TEXT;
         vminor TEXT;
         vpatch TEXT;
     BEGIN
-        LOCK TABLE sysinfo IN SHARE MODE; -- We do need a shared lock here coz we're selecting several rows from a table
+        -- If we need to lock rows we need to have write privs. So we'll use repeatable read instead.
+        PERFORM CheckTransactionIsolation( 'get account spool directory', '{"repeatable read", "serializable"}');
         SELECT pvalue INTO sysname FROM sysinfo WHERE pname = 'sysname';
 		SELECT pvalue INTO vmajor FROM sysinfo WHERE pname = 'vmajor';
 		SELECT pvalue INTO vminor FROM sysinfo WHERE pname = 'vminor';
@@ -523,3 +539,20 @@ INSERT INTO sysinfo(pname, pvalue) VALUES('vpatch', '0');
 -- Populate table `tab_defaults`
 SELECT domain_add('testdomain.org', TRUE, TRUE);
 INSERT INTO tab_defaults(tab_name, tab_id) VALUES('domain', (SELECT MIN(id) FROM domain));
+
+
+-- It seems that CONNECT and TEMPLATE are granted to PUBLIC by default
+--GRANT CONNECT ON DATABASE emailmgr TO emailmgr_writer, emailmgr_reader;
+
+-- We don't want for PUBLIC to create objects
+REVOKE CREATE ON SCHEMA PUBLIC FROM PUBLIC;
+
+-- Security policy will be simple. Writers can read and write, and readers can only read
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO emailmgr_writer;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO emailmgr_reader;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO emailmgr_writer;
+
+-- And we finally add two accounts for a client and a manager
+DROP ROLE IF EXISTS emailmgr_manager, emailmgr_client;
+CREATE ROLE emailmgr_manager WITH LOGIN PASSWORD 'emailmgr_manager' IN ROLE emailmgr_writer;
+CREATE ROLE emailmgr_client WITH LOGIN PASSWORD 'emailmgr_client' IN ROLE emailmgr_reader;
