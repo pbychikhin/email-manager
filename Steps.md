@@ -14,11 +14,12 @@
     * **\[done\]** Install Dovecot
     
 * Create the database `emailmgr`
-    * Re-create an SQL script for Postgres based on the dump from the MySQL `emailmgr` schema
-    * Add creation of roles `reader` and `writer` to read and write the DB data over procedures
-    * Add creation of permissions for `reader` and `writer` to corresponding procedures
-    * Under `root` user, run the script and create the DB
-    * In the DB server, create the `emailmgr` user and grant him the `writer` role
+    * **\[done\]** Re-create an SQL script for Postgres based on the dump from the MySQL `emailmgr` schema
+    * **\[done\]** Add creation of roles `reader` and `writer` to read and write the DB data over procedures
+    * **\[done\]** Add creation of permissions for `reader` and `writer` to corresponding procedures
+    * **\[done\]** Under `root` user, run the script and create the DB
+    * **\[done\]** In the DB server, create the `emailmgr` user and grant him the `writer` role
+    * Write out a doc, 'DB_func_ref.md', describing stored functions
 
 * Create test scripts
     * Create `testldap.py`
