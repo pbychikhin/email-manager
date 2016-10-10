@@ -101,34 +101,7 @@ CREATE TABLE usn_tracking (
     );
 
 
-CREATE TABLE activity_tracking (
-    tab_name TEXT,
-    row_id INTEGER,
-    oper_name TEXT,
-    oper_time TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-CREATE INDEX idx_activity_tracking_tab_oper_time ON activity_tracking(tab_name, oper_name, oper_time);
-
-
-CREATE OR REPLACE FUNCTION UpdateAccountActivity() RETURNS VOID AS $$
-    DECLARE
-        acc_id INTEGER DEFAULT NULL;
-        acc_time TIMESTAMP(0) WITH TIME ZONE DEFAULT NULL;
-    BEGIN
-        FOR acc_id, acc_time IN SELECT row_id, MAX(oper_time) AS accessed FROM activity_tracking WHERE
-            tab_name = 'account' AND oper_name IN ('imap', 'pop') GROUP BY row_id
-        LOOP
-            UPDATE account SET accessed = acc_time WHERE id = acc_id;
-            DELETE FROM activity_tracking WHERE tab_name = 'account' AND oper_name IN ('imap', 'pop') AND
-                oper_time <= acc_time;
-        END LOOP;
-    END;
-    $$
-    LANGUAGE plpgsql;
-
-
-CREATE OR REPLACE FUNCTION GetNamePart(sp_name TEXT, sp_delim TEXT, sp_partname TEXT) RETURNS TEXT AS $$
+CREATE FUNCTION GetNamePart(sp_name TEXT, sp_delim TEXT, sp_partname TEXT) RETURNS TEXT AS $$
     DECLARE
         sp_delim_pos INTEGER DEFAULT POSITION(sp_delim IN sp_name);
     BEGIN
@@ -162,40 +135,6 @@ CREATE OR REPLACE FUNCTION CheckTransactionIsolation(sp_action_name TEXT, sp_lev
     LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION GetDomain(sp_domain TEXT, sp_isolated BOOLEAN DEFAULT FALSE,
-    sp_silent BOOLEAN DEFAULT FALSE) RETURNS RECORD AS $$
-    DECLARE
-        sp_domain_id INTEGER DEFAULT NULL;
-        sp_domain_name TEXT DEFAULT NULL;
-    BEGIN
-        -- If we need to lock rows we need to have write privs. So we'll use repeatable read instead.
-        IF (sp_isolated) THEN
-            PERFORM CheckTransactionIsolation('get domain data', '{"repeatable read", "serializable"}');
-        END IF;
-        IF (sp_domain IS NULL) THEN
-            EXECUTE FORMAT('SELECT d.id, d.name FROM tab_defaults td, domain d '
-                'WHERE td.tab_name = ''domain'' AND d.id = td.tab_id %s',
-                CASE sp_isolated WHEN FALSE THEN 'FOR SHARE' ELSE '' END) INTO sp_domain_id, sp_domain_name;
-            IF (sp_domain_id IS NULL AND NOT sp_silent) THEN
-                RAISE 'Domain isn''t specified (no default exists)' USING
-                    HINT = 'Please set up a default domain in `tab_defaults`';
-            END IF;
-        ELSE
-            EXECUTE FORMAT('SELECT d.id, d.name FROM domain d WHERE lower(name) = lower($1) %s',
-                CASE sp_isolated WHEN FALSE THEN 'FOR SHARE' ELSE '' END) INTO sp_domain_id, sp_domain_name USING
-                sp_domain;
-            IF (sp_domain_id IS NULL AND NOT sp_silent) THEN
-                RAISE 'Domain % not found', sp_domain;
-            END IF;
-        END IF;
-        IF (lower(sp_domain) = lower(sp_domain_name)) THEN
-            sp_domain_name = sp_domain; -- We should not change the string case when it is returned to a user
-        END IF;
-        RETURN(sp_domain_id, sp_domain_name);
-    END;$$
-    LANGUAGE plpgsql;
-
-
 CREATE TYPE client_proto AS ENUM ('smtp', 'pop', 'imap');
 
 CREATE OR REPLACE FUNCTION GetAccountSpoolDir(sp_name TEXT, sp_caller client_proto) RETURNS TEXT AS $$
@@ -204,17 +143,18 @@ CREATE OR REPLACE FUNCTION GetAccountSpoolDir(sp_name TEXT, sp_caller client_pro
         sp_acdomain TEXT DEFAULT GetNamePart(sp_name, '@', 'domain');
         sp_domain_id INTEGER DEFAULT NULL;
         sp_spool_dir TEXT DEFAULT NULL;
-        sp_acc_id INTEGER DEFAULT NULL;
     BEGIN
-        PERFORM CheckTransactionIsolation('get account spool directory', '{"repeatable read", "serializable"}');
-        SELECT * FROM GetDomain(sp_acdomain, TRUE, TRUE) AS (id INTEGER, name TEXT) INTO sp_domain_id, sp_acdomain;
-        SELECT account.id, CONCAT (domain.spooldir, '/', account.spooldir) FROM account, domain INTO
-            sp_acc_id, sp_spool_dir WHERE
+        IF (sp_acdomain IS NULL) THEN
+            SELECT name FROM domain INTO sp_acdomain WHERE id = (SELECT tab_id FROM tab_defaults WHERE tab_name = 'domain') FOR SHARE;
+        END IF;
+        SELECT id FROM domain INTO sp_domain_id WHERE lower(name) = lower(sp_acdomain) AND active = TRUE FOR SHARE;
+        SELECT CONCAT(domain.spooldir, '/', account.spooldir) FROM account, domain INTO sp_spool_dir WHERE
             lower(account.name) = lower(sp_acname) AND account.active = TRUE AND
             domain.id = sp_domain_id AND
-            domain.active = TRUE AND account.domain_id = sp_domain_id;
-        IF (sp_acc_id IS NOT NULL AND sp_caller IN ('imap', 'pop')) THEN
-			INSERT INTO activity_tracking(tab_name, row_id, oper_name) VALUES ('account', sp_acc_id, sp_caller);
+            domain.active = TRUE AND account.domain_id = sp_domain_id FOR SHARE;
+        IF (sp_caller IN ('imap', 'pop')) THEN
+            UPDATE account SET accessed = CURRENT_TIMESTAMP WHERE lower(name) = lower(sp_acname) AND active = TRUE AND
+			    domain_id = sp_domain_id;
 	    END IF;
 	    RETURN(sp_spool_dir);
     END;$$
@@ -232,7 +172,7 @@ CREATE OR REPLACE FUNCTION GetFullSysName() RETURNS TEXT AS $$
         vpatch TEXT;
     BEGIN
         -- If we need to lock rows we need to have write privs. So we'll use repeatable read instead.
-        PERFORM CheckTransactionIsolation( 'get system name', '{"repeatable read", "serializable"}');
+        PERFORM CheckTransactionIsolation( 'get account spool directory', '{"repeatable read", "serializable"}');
         SELECT pvalue INTO sysname FROM sysinfo WHERE pname = 'sysname';
 		SELECT pvalue INTO vmajor FROM sysinfo WHERE pname = 'vmajor';
 		SELECT pvalue INTO vminor FROM sysinfo WHERE pname = 'vminor';
@@ -242,7 +182,7 @@ CREATE OR REPLACE FUNCTION GetFullSysName() RETURNS TEXT AS $$
 	LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION GetApacheDigAuth(sp_name TEXT, sp_realm TEXT) RETURNS TEXT AS $$
+CREATE FUNCTION GetApacheDigAuth(sp_name TEXT, sp_realm TEXT) RETURNS TEXT AS $$
     BEGIN
         RETURN
             (SELECT MD5(CONCAT(sp_name, ':', sp_realm, ':', account.password))
@@ -254,15 +194,14 @@ CREATE OR REPLACE FUNCTION GetApacheDigAuth(sp_name TEXT, sp_realm TEXT) RETURNS
 	LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION sasl_getlogin(sp_name TEXT) RETURNS TEXT AS $$
+CREATE FUNCTION sasl_getlogin(sp_name TEXT) RETURNS TEXT AS $$
     DECLARE
         sp_acname TEXT DEFAULT GetNamePart(sp_name, '@', 'name');
         sp_acdomain TEXT DEFAULT GetNamePart(sp_name, '@', 'domain');
-        sp_defaultdomain TEXT DEFAULT (SELECT d.name FROM domain d, tab_defaults td WHERE td.tab_name = 'domain' AND
-            d.id = td.tab_id);
+        sp_defaultdomain TEXT DEFAULT (SELECT name FROM domain WHERE id = (SELECT tab_id
+		    FROM tab_defaults WHERE tab_name = 'domain') FOR SHARE);
 		sp_logins TEXT DEFAULT NULL;
     BEGIN
-        PERFORM CheckTransactionIsolation( 'get login for SASL', '{"repeatable read", "serializable"}');
         IF (sp_acname IS NULL OR sp_acdomain IS NULL) THEN
 		    RETURN(NULL);
 		END IF;
@@ -279,15 +218,15 @@ CREATE OR REPLACE FUNCTION sasl_getlogin(sp_name TEXT) RETURNS TEXT AS $$
 	LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION sasl_getpass(sp_name TEXT) RETURNS TEXT AS $$
+CREATE FUNCTION sasl_getpass(sp_name TEXT) RETURNS TEXT AS $$
     DECLARE
         sp_acname TEXT DEFAULT GetNamePart(sp_name, '@', 'name');
         sp_acdomain TEXT DEFAULT GetNamePart(sp_name, '@', 'domain');
     BEGIN
-        PERFORM CheckTransactionIsolation('get login for SASL', '{"repeatable read", "serializable"}');
         IF (sp_acdomain IS NULL) THEN
-            SELECT d.name INTO sp_acdomain FROM domain d, tab_defaults td WHERE
-                td.tab_name = 'domain' AND d.id = td.tab_id;
+        	SELECT name INTO sp_acdomain
+		        FROM domain
+		        WHERE id = (SELECT tab_id FROM tab_defaults WHERE tab_name = 'domain') FOR SHARE;
 		END IF;
 		RETURN(SELECT CONCAT('PLAIN', password)
 		    FROM account, domain
@@ -298,7 +237,7 @@ CREATE OR REPLACE FUNCTION sasl_getpass(sp_name TEXT) RETURNS TEXT AS $$
     LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION VALUE_OR_DEFAULT(sp_var BOOLEAN) RETURNS TEXT AS $$
+CREATE FUNCTION VALUE_OR_DEFAULT(sp_var BOOLEAN) RETURNS TEXT AS $$
     BEGIN
         IF (sp_var IS NOT NULL) THEN
             IF (sp_var = TRUE) THEN
@@ -313,10 +252,37 @@ CREATE OR REPLACE FUNCTION VALUE_OR_DEFAULT(sp_var BOOLEAN) RETURNS TEXT AS $$
     LANGUAGE plpgsql;
 
 
+CREATE FUNCTION GetDomain(sp_domain TEXT) RETURNS RECORD AS $$
+    DECLARE
+        sp_domain_id INTEGER DEFAULT NULL;
+        sp_domain_name TEXT DEFAULT NULL;
+    BEGIN
+        IF (sp_domain IS NULL) THEN
+            SELECT d.id, d.name INTO sp_domain_id, sp_domain_name FROM tab_defaults td, domain d
+                WHERE td.tab_name = 'domain' AND d.id = td.tab_id FOR SHARE OF d;
+            IF (sp_domain_id IS NULL) THEN
+                RAISE 'Domain isn''t specified (no default exists)' USING
+                    HINT = 'Please set up a default domain in `tab_defaults`';
+            END IF;
+        ELSE
+            SELECT d.id, d.name INTO sp_domain_id, sp_domain_name FROM domain d WHERE
+                lower(name) = lower(sp_domain) FOR SHARE;
+            IF (sp_domain_id IS NULL) THEN
+                RAISE 'Domain % not found', sp_domain;
+            END IF;
+        END IF;
+        IF (lower(sp_domain) = lower(sp_domain_name)) THEN
+            sp_domain_name = sp_domain; -- We should not change the string case when it is returned to a user
+        END IF;
+        RETURN(sp_domain_id, sp_domain_name);
+    END;$$
+    LANGUAGE plpgsql;
+
+
 CREATE EXTENSION "uuid-ossp";
 
 
-CREATE OR REPLACE FUNCTION domain_add(sp_name TEXT, sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID AS $$
+CREATE FUNCTION domain_add(sp_name TEXT, sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID AS $$
     BEGIN
         LOCK TABLE domain IN SHARE ROW EXCLUSIVE MODE; -- We need locking because after checking for existence we have to rely on results of that check
 		IF (EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_name))) THEN
@@ -324,12 +290,12 @@ CREATE OR REPLACE FUNCTION domain_add(sp_name TEXT, sp_active BOOLEAN, sp_public
 		END IF;
 		EXECUTE FORMAT('INSERT INTO domain(name, spooldir, created, modified, active, public, ad_sync_enabled) '
                     'VALUES ($1, UUID_GENERATE_V1(), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '
-                    '%s, %s, FALSE)',  VALUE_OR_DEFAULT(sp_active), VALUE_OR_DEFAULT(sp_public)) USING sp_name;
+                    '%s, %s, FALSE);',  VALUE_OR_DEFAULT(sp_active), VALUE_OR_DEFAULT(sp_public)) USING sp_name;
 	END;$$
 	LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION domain_del(sp_name TEXT) RETURNS VOID AS $$
+CREATE FUNCTION domain_del(sp_name TEXT) RETURNS VOID AS $$
     BEGIN
 		IF (NOT EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_name) FOR UPDATE)) THEN
 		    RAISE 'The domain % does not exist', sp_name;
@@ -343,7 +309,7 @@ CREATE OR REPLACE FUNCTION domain_del(sp_name TEXT) RETURNS VOID AS $$
 	LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION domain_mod(sp_name TEXT, sp_newname TEXT, sp_active BOOLEAN, sp_public BOOLEAN,
+CREATE FUNCTION domain_mod(sp_name TEXT, sp_newname TEXT, sp_active BOOLEAN, sp_public BOOLEAN,
     sp_ad_sync_enabled BOOLEAN) RETURNS VOID AS $$
     DECLARE
         DECLARE old_name TEXT;
@@ -374,7 +340,7 @@ CREATE OR REPLACE FUNCTION domain_mod(sp_name TEXT, sp_newname TEXT, sp_active B
     LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION account_add(sp_domain TEXT, sp_name TEXT, sp_password TEXT, sp_fullname TEXT,
+CREATE FUNCTION account_add(sp_domain TEXT, sp_name TEXT, sp_password TEXT, sp_fullname TEXT,
     sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID AS $$
     DECLARE
         sp_domain_id INTEGER DEFAULT NULL;
@@ -389,13 +355,13 @@ CREATE OR REPLACE FUNCTION account_add(sp_domain TEXT, sp_name TEXT, sp_password
 		                    'password_enabled, ad_sync_enabled) '
 			                'VALUES ($1, $2, $3, $4, '
 				            'CONCAT(UUID_GENERATE_V1(), ''/''), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '
-				            '%s, %s, TRUE, FALSE)', VALUE_OR_DEFAULT(sp_active), VALUE_OR_DEFAULT(sp_public)) USING
+				            '%s, %s, TRUE, FALSE);', VALUE_OR_DEFAULT(sp_active), VALUE_OR_DEFAULT(sp_public)) USING
 				            sp_domain_id, sp_name, sp_password, sp_fullname;
 	    END;$$
 	    LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION account_del(sp_domain TEXT, sp_name TEXT) RETURNS VOID AS $$
+CREATE FUNCTION account_del(sp_domain TEXT, sp_name TEXT) RETURNS VOID AS $$
     DECLARE
         sp_domain_id INTEGER DEFAULT NULL;
         sp_domain_name TEXT DEFAULT NULL;
@@ -411,7 +377,7 @@ CREATE OR REPLACE FUNCTION account_del(sp_domain TEXT, sp_name TEXT) RETURNS VOI
 	LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION account_mod(sp_domain TEXT, sp_name TEXT, sp_newname TEXT, sp_password TEXT, sp_fullname TEXT,
+CREATE FUNCTION account_mod(sp_domain TEXT, sp_name TEXT, sp_newname TEXT, sp_password TEXT, sp_fullname TEXT,
                     sp_active BOOLEAN, sp_public BOOLEAN, sp_password_enabled BOOLEAN, sp_ad_sync_enabled BOOLEAN)
                     RETURNS VOID AS $$
     DECLARE
@@ -460,7 +426,7 @@ CREATE OR REPLACE FUNCTION account_mod(sp_domain TEXT, sp_name TEXT, sp_newname 
 	LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION alias_add(sp_name TEXT, sp_value TEXT, sp_fullname TEXT, sp_active BOOLEAN, sp_public BOOLEAN)
+CREATE FUNCTION alias_add(sp_name TEXT, sp_value TEXT, sp_fullname TEXT, sp_active BOOLEAN, sp_public BOOLEAN)
     RETURNS VOID AS $$
     DECLARE
         new_alias_name_created BOOLEAN DEFAULT FALSE;
@@ -472,12 +438,12 @@ CREATE OR REPLACE FUNCTION alias_add(sp_name TEXT, sp_value TEXT, sp_fullname TE
 		END IF;
 		IF (NOT EXISTS(SELECT * FROM alias_name WHERE lower(name) = lower(sp_name))) THEN
 			EXECUTE FORMAT('INSERT INTO alias_name(name, fullname, created, modified, active, public) '
-			    'VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s, %s)',
+			    'VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s, %s);',
 			    VALUE_OR_DEFAULT(sp_active), VALUE_OR_DEFAULT(sp_public)) USING sp_name, sp_fullname;
 			new_alias_name_created = TRUE;
 		END IF;
 		EXECUTE FORMAT('INSERT INTO alias_value(name_id, value, created, modified, active) '
-		    'VALUES($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s)',
+		    'VALUES($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s);',
 			CASE WHEN sp_active IS NOT NULL AND new_alias_name_created = FALSE THEN QUOTE_LITERAL(sp_active)
 			    ELSE 'DEFAULT' END)
 			USING (SELECT id FROM alias_name WHERE lower(name) = lower(sp_name)), sp_value;
@@ -485,7 +451,7 @@ CREATE OR REPLACE FUNCTION alias_add(sp_name TEXT, sp_value TEXT, sp_fullname TE
     LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION alias_del(sp_name TEXT, sp_value TEXT) RETURNS VOID AS $$
+CREATE FUNCTION alias_del(sp_name TEXT, sp_value TEXT) RETURNS VOID AS $$
     BEGIN
 		IF (sp_value IS NULL) THEN
 			IF (NOT EXISTS(SELECT * FROM alias_name WHERE lower(name) = lower(sp_name) FOR UPDATE)) THEN
@@ -508,7 +474,7 @@ CREATE OR REPLACE FUNCTION alias_del(sp_name TEXT, sp_value TEXT) RETURNS VOID A
     LANGUAGE plpgsql;
 
 
-CREATE OR REPLACE FUNCTION alias_mod(sp_name TEXT, sp_newname TEXT, sp_value TEXT, sp_newvalue TEXT, sp_fullname TEXT,
+CREATE FUNCTION alias_mod(sp_name TEXT, sp_newname TEXT, sp_value TEXT, sp_newvalue TEXT, sp_fullname TEXT,
     sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID AS $$
     DECLARE
         old_name TEXT;
