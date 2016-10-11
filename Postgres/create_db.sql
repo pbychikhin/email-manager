@@ -237,7 +237,7 @@ CREATE OR REPLACE FUNCTION GetFullSysName() RETURNS TEXT AS $$
 		SELECT pvalue INTO vmajor FROM sysinfo WHERE pname = 'vmajor';
 		SELECT pvalue INTO vminor FROM sysinfo WHERE pname = 'vminor';
 		SELECT pvalue INTO vpatch FROM sysinfo WHERE pname = 'vpatch';
-		RETURN(LOWER(CONCAT(sysname, ':', vmajor, ':', vminor, ':', vpatch)));
+		RETURN(LOWER(CONCAT_WS(':', sysname, vmajor, vminor, vpatch)));
 	END;$$
 	LANGUAGE plpgsql;
 
