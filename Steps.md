@@ -22,6 +22,9 @@
     * Write out a doc, 'DB_func_ref.md', describing stored functions
 
 * Create test scripts
+    * Create load test suite:
+        * Create `create_accounts.py`. This will randomly create N-account in the DB.
+        Names have to be human readable. N-number has to be specified as an option.
     * Create `testldap.py`
         * Get user data from AD
         * Represent user data using table and record views
