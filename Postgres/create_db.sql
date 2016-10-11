@@ -284,7 +284,7 @@ CREATE OR REPLACE FUNCTION sasl_getpass(sp_name TEXT) RETURNS TEXT AS $$
         sp_acname TEXT DEFAULT GetNamePart(sp_name, '@', 'name');
         sp_acdomain TEXT DEFAULT GetNamePart(sp_name, '@', 'domain');
     BEGIN
-        PERFORM CheckTransactionIsolation('get login for SASL', '{"repeatable read", "serializable"}');
+        PERFORM CheckTransactionIsolation('get password for SASL', '{"repeatable read", "serializable"}');
         IF (sp_acdomain IS NULL) THEN
             SELECT d.name INTO sp_acdomain FROM domain d, tab_defaults td WHERE
                 td.tab_name = 'domain' AND d.id = td.tab_id;
