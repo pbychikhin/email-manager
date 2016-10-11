@@ -1,7 +1,12 @@
 # Stored routines reference
 
+## Table of contents
+* [Data querying](#data-quering)
+* [Data adding](#data-adding)
+* [Data deleting](#data-deleting)
 
-## Data query
+
+## [Data querying](#data-quering)
 
 * _GetAccountSpoolDir(sp_name TEXT, sp_caller client_proto) RETURNS TEXT_  
 `sp_name` is an email address. It can be given with or without a domain part. If one is absent, it will be added automatically.  
@@ -26,7 +31,78 @@ Returns a string (or NULL) of login names for postfix when it's checking for mat
 * _sasl_getpass(sp_name TEXT) RETURNS TEXT_  
 `sp_name` is an email address. It can be given with or without a domain part. If one is absent, it will be added automatically.  
 Requires at least repeatable read isolation level.  
-Returns an account password (or NULL) in clear text for SASL auth.
+Returns 'PLAIN' plus an account password in clear text (or NULL) for SASL auth. This is in accordance to Dovecot's specification.
+
+
+## [Data adding](#data-adding)
+
+* _domain_add(sp_name TEXT, sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID_  
+`sp_name` is a domain name.  
+`sp_active` is a flag indicating whether the domain is is action.  
+`sp_public` is a flag indication whether the domain allows publishing it's content in the public address book.  
+Both `sp_active` and `sp_public` can be NULL. In this case they will be set to table's defaults.  
+Adds a new domain.  
+Does not return.  
+Raises an exception with hint which has to be caught by the control process.
+
+* _account_add(sp_domain TEXT, sp_name TEXT, sp_password TEXT, sp_fullname TEXT, sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID_  
+`sp_domain` is an account domain name.  
+`sp_name` is an accoun name.  
+`sp_password` is an account password in clear text  
+`sp_fullname` is an account full name (or a description). Can be NULL.  
+`sp_active` is a flag indicating whether the account is is action.  
+`sp_public` is a flag indication whether the account allows publishing int's name in the public address book.  
+Both `sp_active` and `sp_public` can be NULL. In this case they will be set to table's defaults.  
+`sp_domain` can also be NULL. In this case the default will be looked up.
+Adds a new account.  
+Does not return.  
+Raises an exception with hint which has to be caught by the control process.
+
+
+## [Data deleting](#data-deleting)
+
+* _domain_del(sp_name TEXT) RETURNS VOID_  
+`sp_name` is a domain name.  
+Deletes an existing domain. This is impossible if there still are accounts linked to that domain.  
+Does not return.  
+Raises an exception with hint which has to be caught by the control process.
+
+* _account_del(sp_domain TEXT, sp_name TEXT) RETURNS VOID_  
+`sp_domain` is an account domain name.  
+`sp_name` is an accoun name.  
+Deletes an existing account. This is impossible if there still are accounts linked to that domain.  
+Does not return.  
+Raises an exception with hint which has to be caught by the control process.
+
+
+## Data changing
+
+* _domain_mod(sp_name TEXT, sp_newname TEXT, sp_active BOOLEAN, sp_public BOOLEAN, sp_ad_sync_enabled BOOLEAN) RETURNS VOID_  
+`sp_name` is a domain name.  
+`sp_newname` is a new domain name in case of renaming.  
+`sp_active` is a flag indicating whether the domain is is action.  
+`sp_public` is a flag indication whether the domain allows publishing it's content in the public address book.  
+`sp_ad_sync_enabled` is a flag indicating the domain is to be in sync with AD.  
+All but one of the above parameters excluding `sp_name` can be NULL.  
+Modifies an existing domain.  
+Does not return.  
+Raises an exception with hint which has to be caught by the control process.
+
+* _account_mod(sp_domain TEXT, sp_name TEXT, sp_newname TEXT, sp_password TEXT, sp_fullname TEXT, sp_active BOOLEAN, sp_public BOOLEAN, sp_password_enabled BOOLEAN, sp_ad_sync_enabled BOOLEAN) RETURNS VOID_  
+`sp_domain` is an account domain name.  
+`sp_name` is an accoun name.  
+`sp_newname` is a new account name in case of renaming.  
+`sp_password` is an account password in clear text  
+`sp_fullname` is an account full name (or a description).  
+`sp_active` is a flag indicating whether the account is is action.  
+`sp_public` is a flag indication whether the account allows publishing int's name in the public address book.  
+`sp_password_enabled` is a flag indicating whether it is possible to use a password from DB in auth. If not, the only GSSAPI (AD) scheme will be used.  
+`sp_ad_sync_enabled` is a flag indicating the domain is to be in sync with AD.
+All but one of the above parameters excluding `sp_name` can be NULL.  
+If `sp_domain` is NULL the default will be looked up.
+Modifies an existing account.  
+Does not return.  
+Raises an exception with hint which has to be caught by the control process.
 
 
 ## Utility
@@ -40,6 +116,7 @@ Returns a name or domain part of an email address (or NULL).
 * _CheckTransactionIsolation(sp_action_name TEXT, sp_levels_allowed TEXT[]) RETURNS VOID_  
 `sp_action_name` is a string describing the action is being performed so the control process can get sensible diagnostic message.  
 `sp_levels_allowed` is an array or isolation levels allowed.  
+Checks if the current isolation level meets requirements.  
 Does not return.  
 Raises an exception with hint which has to be caught by the control process.
 
@@ -53,7 +130,7 @@ May rise an exception with hint which has to be caught by the control process.
 
 * _VALUE_OR_DEFAULT(sp_var BOOLEAN) RETURNS TEXT_  
 `sp_var` - a boolean var which can either be null or not null.  
-Returns a string which can either be 'TRUE' or 'FALSE' in case sp_var isn't NULL, or 'NULL' otherwise.  
+Returns a string which can either be 'TRUE' or 'FALSE' in case `sp_var` isn't NULL, or 'NULL' otherwise.  
 The use of this proc is arguable. It's just a shortcut for CASE ... WHEN ... THEN ...
 
 
