@@ -19,7 +19,7 @@
     * **\[done\]** Add creation of permissions for `reader` and `writer` to corresponding procedures
     * **\[done\]** Under `root` user, run the script and create the DB
     * **\[done\]** In the DB server, create the `emailmgr` user and grant him the `writer` role
-    * Write out a doc, 'DB_func_ref.md', describing stored functions
+    * **\[done\]** Write out a doc, 'DB_func_ref.md', describing stored functions
 
 * Create test scripts
     * Create load test suite:
