@@ -60,6 +60,17 @@ Adds a new account.
 Does not return.  
 Raises an exception with hint which has to be caught by the control process.
 
+* _alias_add(sp_name TEXT, sp_value TEXT, sp_fullname TEXT, sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID_  
+`sp_name` is an emain alias.  
+`sp_value` is a referenced email address.  
+`sp_fullname` is an alias full name (or a description).  
+`sp_active` is a flag indicating whether the alias is is action.  
+`sp_public` is a flag indication whether the alias allows publishing int's name in the public address book.  
+Both `sp_active` and `sp_public` can be NULL. In this case they will be set to table's defaults.  
+Adds a new alias.  
+Does not return.  
+Raises an exception with hint which has to be caught by the control process.
+
 
 ## Data deleting
 
@@ -73,6 +84,13 @@ Raises an exception with hint which has to be caught by the control process.
 `sp_domain` is an account domain name.  
 `sp_name` is an accoun name.  
 Deletes an existing account. This is impossible if there still are accounts linked to that domain.  
+Does not return.  
+Raises an exception with hint which has to be caught by the control process.
+
+* _alias_del(sp_name TEXT, sp_value TEXT) RETURNS VOID_  
+`sp_name` is an emain alias.  
+`sp_value` is a referenced email address. Can be NULL. In this case all referenced values will be deleted.  
+Deletes a referenced address or all addresses under specified alias.  
 Does not return.  
 Raises an exception with hint which has to be caught by the control process.
 
@@ -92,7 +110,7 @@ Raises an exception with hint which has to be caught by the control process.
 
 * _account_mod(sp_domain TEXT, sp_name TEXT, sp_newname TEXT, sp_password TEXT, sp_fullname TEXT, sp_active BOOLEAN, sp_public BOOLEAN, sp_password_enabled BOOLEAN, sp_ad_sync_enabled BOOLEAN) RETURNS VOID_  
 `sp_domain` is an account domain name.  
-`sp_name` is an accoun name.  
+`sp_name` is an account name.  
 `sp_newname` is a new account name in case of renaming.  
 `sp_password` is an account password in clear text  
 `sp_fullname` is an account full name (or a description).  
@@ -103,6 +121,19 @@ Raises an exception with hint which has to be caught by the control process.
 All but one of the above parameters excluding `sp_name` can be NULL.  
 If `sp_domain` is NULL the default will be looked up.
 Modifies an existing account.  
+Does not return.  
+Raises an exception with hint which has to be caught by the control process.
+
+* _alias_mod(sp_name TEXT, sp_newname TEXT, sp_value TEXT, sp_newvalue TEXT, sp_fullname TEXT, sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID_
+`sp_name` is an emain alias.  
+`sp_newname` is a new alias name in case of renaming.  
+`sp_value` is a referenced email address.
+`sp_newvalue` is a new referenced email address in case of renaming.  
+`sp_active` is a flag indicating whether the alias is is action.  
+`sp_public` is a flag indication whether the alias allows publishing int's name in the public address book.  
+All but one of the above parameters excluding `sp_name` can be NULL.  
+If `sp_value` is NULL the alias itself will be modified. The referenced email address will be modified otherwise.  
+Modifies an existing alias.  
 Does not return.  
 Raises an exception with hint which has to be caught by the control process.
 
