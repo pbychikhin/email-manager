@@ -23,15 +23,17 @@
 
 * Create test scripts
     * Create load test suite:
-        * **\[done\]** Create `create_accounts.py`. This will randomly create N-account in the DB.  
+        * **\[done\]** Create `create_accounts.py`. This will randomly create N-account in the DB.
         Names have to be human readable. N-number has to be specified as an option.
-        * Create `request_account.py`. This will retrieve a full list of accounts in a specified domain.  
+        * Create `request_account.py`. This will retrieve a full list of accounts in a specified domain.
         This will then request the spool directiory of a randomly chosen account.
         Operations will be performed in randomly chosen intervals between 0.1 and 1 sec.
         All errors will be reported.
-        * Create `manipulate_account.py`. This will retrieve a full list of accounts in a specified domain.  
+        * Create `manipulate_account.py`. This will retrieve a full list of accounts in a specified domain.
         This will then add/delete/modify a randomly chosen account.
         Operations will be performed in randomly chosen intervals between 0.1 and 1 sec.
+        All errors will be reported.
+        * Create `flush_tracking.py`. This will flush activity tracking stamps (run UpdateAccountActivity()) once per specified time interval.
         All errors will be reported.
     * Create `testldap.py`
         * Get user data from AD
