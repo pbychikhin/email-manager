@@ -101,7 +101,8 @@ CREATE TABLE usn_tracking (
     );
 
 
-CREATE TABLE activity_tracking (
+-- activity_tracking seems not to keep any sensitive data so that's a point to have it unlogged
+CREATE UNLOGGED TABLE activity_tracking (
     tab_name TEXT,
     row_id INTEGER,
     oper_name TEXT,
