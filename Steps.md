@@ -25,7 +25,7 @@
     * Create load test suite:
         * **\[done\]** Create `create_accounts.py`. This will randomly create N-account in the DB.
         Names have to be human readable. N-number has to be specified as an option.
-        * Create `request_account.py`. This will retrieve a full list of accounts in a specified domain.
+        * **\[done\]** Create `request_account.py`. This will retrieve a full list of accounts in a specified domain.
         This will then request the spool directiory of a randomly chosen account.
         Operations will be performed in randomly chosen intervals between 0.1 and 1 sec.
         All errors will be reported.
