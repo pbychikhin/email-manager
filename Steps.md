@@ -33,7 +33,7 @@
         This will then add/delete/modify a randomly chosen account.
         Operations will be performed in randomly chosen intervals between 0.1 and 1 sec.
         All errors will be reported.
-        * Create `flush_tracking.py`. This will flush activity tracking stamps (run UpdateAccountActivity()) once per specified time interval.
+        * **\[done\]** Create `flush_tracking.py`. This will flush activity tracking stamps (run UpdateAccountActivity()) once per specified time interval.
         All errors will be reported.
     * Create `testldap.py`
         * Get user data from AD
