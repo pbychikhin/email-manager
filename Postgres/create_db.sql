@@ -352,7 +352,7 @@ CREATE OR REPLACE FUNCTION domain_mod(sp_name TEXT, sp_newname TEXT, sp_active B
         DECLARE old_public BOOLEAN;
         DECLARE old_ad_sync_enabled BOOLEAN;
     BEGIN
-        IF (COALESCE(sp_newname, sp_active, sp_public, sp_ad_sync_enabled) IS NULL) THEN
+        IF (num_nonnulls(sp_newname, sp_active, sp_public, sp_ad_sync_enabled) = 0) THEN
             RAISE 'Nothing to change';
 		END IF;
 		IF (NOT EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_name) FOR UPDATE)) THEN
@@ -428,8 +428,8 @@ CREATE OR REPLACE FUNCTION account_mod(sp_domain TEXT, sp_name TEXT, sp_newname 
         sp_domain_name TEXT DEFAULT NULL;
     BEGIN
         SELECT * FROM GetDomain(sp_domain) AS (id INTEGER, name TEXT) INTO sp_domain_id, sp_domain_name;
-		IF (COALESCE(sp_newname, sp_password, sp_password_enabled, sp_fullname, sp_active, sp_public,
-			sp_ad_sync_enabled) IS NULL) THEN
+		IF (num_nonnulls(sp_newname, sp_password, sp_password_enabled, sp_fullname, sp_active, sp_public,
+			sp_ad_sync_enabled) = 0) THEN
 			RAISE 'Nothing to change';
 		END IF;
 		IF (NOT EXISTS(SELECT * FROM account WHERE lower(name) = lower(sp_name) AND
@@ -519,7 +519,7 @@ CREATE OR REPLACE FUNCTION alias_mod(sp_name TEXT, sp_newname TEXT, sp_value TEX
         old_public BOOLEAN;
     BEGIN
 		IF (sp_value IS NULL) THEN
-			IF (COALESCE(sp_newname, sp_fullname, sp_active, sp_public) IS NULL) THEN
+			IF (num_nonnulls(sp_newname, sp_fullname, sp_active, sp_public) = 0) THEN
 				RAISE 'Nothing to change';
 			END IF;
 			IF (NOT EXISTS(SELECT * FROM alias_name WHERE lower(name) = lower(sp_name) FOR UPDATE)) THEN
@@ -539,7 +539,7 @@ CREATE OR REPLACE FUNCTION alias_mod(sp_name TEXT, sp_newname TEXT, sp_value TEX
 				modified = CURRENT_TIMESTAMP
 			    WHERE lower(name) = lower(sp_name);
 	    ELSE
-			IF (COALESCE(sp_newvalue, sp_active) IS NULL) THEN
+			IF (num_nonnulls(sp_newvalue, sp_active) = 0) THEN
 				RAISE 'Nothing to change';
 			END IF;
 			IF (NOT EXISTS(SELECT * FROM alias_value WHERE lower(value) = lower(sp_value) AND

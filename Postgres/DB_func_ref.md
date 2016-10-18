@@ -117,7 +117,7 @@ Raises an exception with hint which has to be caught by the control process.
 `sp_active` is a flag indicating whether the account is is action.  
 `sp_public` is a flag indication whether the account allows publishing int's name in the public address book.  
 `sp_password_enabled` is a flag indicating whether it is possible to use a password from DB in auth. If not, the only GSSAPI (AD) scheme will be used.  
-`sp_ad_sync_enabled` is a flag indicating the domain is to be in sync with AD.
+`sp_ad_sync_enabled` is a flag indicating the domain is to be in sync with AD.  
 All but one of the above parameters excluding `sp_name` can be NULL.  
 If `sp_domain` is NULL the default will be looked up.
 Modifies an existing account.  

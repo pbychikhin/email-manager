@@ -8,6 +8,7 @@ cmdlnparser.add_argument("--dbname", help = "DB name")
 cmdlnparser.add_argument("--user", help = "DB user")
 cmdlnparser.add_argument("--password", help = "DB user password")
 cmdlnparser.add_argument("--domain", help = "Email domain to operate with")
+cmdlnparser.add_argument("--num", help="Number of accounts to be created", type=int, default=100)
 cmdlargs = cmdlnparser.parse_args()
 
 import sys
@@ -49,7 +50,7 @@ import petname
 
 pets = {}
 
-for i in range(1, 100):
+for i in range(cmdlargs.num):
     mypet = petname.Generate(2, ".").split(".")
     pets[".".join(mypet)] = " ".join((mypet[0].capitalize(), mypet[1].capitalize()))
 print "Inserting data..."
