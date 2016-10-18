@@ -29,7 +29,7 @@
         This will then request the spool directiory of a randomly chosen account.
         Operations will be performed in randomly chosen intervals between 0.1 and 1 sec.
         All errors will be reported.
-        * Create `manipulate_account.py`. This will retrieve a full list of accounts in a specified domain.
+        * **\[done\]** Create `manipulate_account.py`. This will retrieve a full list of accounts in a specified domain.
         This will then add/delete/modify a randomly chosen account.
         Operations will be performed in randomly chosen intervals between 0.1 and 1 sec.
         All errors will be reported.
