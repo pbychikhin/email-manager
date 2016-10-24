@@ -3,9 +3,9 @@ import argparse, random, ldap, sys
 from ldap.cidict import cidict
 
 cmdlnparser = argparse.ArgumentParser(description="Get users from AD")
-cmdlnparser.add_argument("-c", help="AD controller(s)", action="append")
-cmdlnparser.add_argument("-u", help="AD user")
-cmdlnparser.add_argument("-p", help="AD password")
+cmdlnparser.add_argument("-c", help="AD controller(s)", action="append", required=True)
+cmdlnparser.add_argument("-u", help="AD user", default="")
+cmdlnparser.add_argument("-p", help="AD password", default="")
 cmdlargs = cmdlnparser.parse_args()
 
 lobj = ldap.initialize("ldap://{}".format(random.choice(cmdlargs.c)))
@@ -26,11 +26,16 @@ except ldap.INVALID_CREDENTIALS:
     sys.exit(1)
 
 # Get domain
-lres = lobj.search_s(base="CN=Partitions,{}".format(rootDSE["configurationNamingContext"][0]),
-                     scope=ldap.SCOPE_ONELEVEL,
-                     filterstr="(&(objectClass=crossRef)(nCName={}))".format(rootDSE["defaultNamingContext"][0]),
-                     attrlist=("dnsRoot", "nETBIOSName"))
-domainAttrs = cidict(lres[0][1])
+try:
+    lres = lobj.search_s(base="CN=Partitions,{}".format(rootDSE["configurationNamingContext"][0]),
+                         scope=ldap.SCOPE_ONELEVEL,
+                         filterstr="(&(objectClass=crossRef)(nCName={}))".format(rootDSE["defaultNamingContext"][0]),
+                         attrlist=("dnsRoot", "nETBIOSName"))
+    domainAttrs = cidict(lres[0][1])
+except ldap.OPERATIONS_ERROR as lexcp:
+    print "Error in ldap operation: {}".format(lexcp.args[0]["info"])
+    sys.exit(1)
+
 print "Domain attrs:"
 for name, val in domainAttrs.items():
     print "Attr {}: {}".format(name, val[0])
