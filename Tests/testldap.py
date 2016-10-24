@@ -32,8 +32,9 @@ try:
                          filterstr="(&(objectClass=crossRef)(nCName={}))".format(rootDSE["defaultNamingContext"][0]),
                          attrlist=("dnsRoot", "nETBIOSName"))
     domainAttrs = cidict(lres[0][1])
-except ldap.OPERATIONS_ERROR as lexcp:
-    print "Error in ldap operation: {}".format(lexcp.args[0]["info"])
+except ldap.LDAPError as lexcp:
+    print "Error has happened: {}".format(lexcp.message["desc"])
+    print "It means that: {}".format(lexcp.message["info"])
     sys.exit(1)
 
 print "Domain attrs:"
