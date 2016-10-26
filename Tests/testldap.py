@@ -20,9 +20,10 @@ class ldap_exception_handler:
         if do_exit is not None:
             self.do_exit = do_exit
         print >> sys.stderr, "LDAP error has happened: {}".format(ldap_exception.message["desc"])
-        print >> sys.stderr, "This means that:\n  {}".format(ldap_exception.message["info"])
+        if "info" in ldap_exception.message:
+            print >> sys.stderr, "This means that:\n  {}".format(ldap_exception.message["info"])
         if self.print_traceback:
-            print >> sys.stderr, "And happened at:"
+            print >> sys.stderr, "Occurred at:"
             traceback.print_tb(sys.exc_info()[2], limit=1)
         if self.do_exit:
             sys.exit(1)
@@ -32,12 +33,17 @@ handle_ldap_exception = ldap_exception_handler(do_exit=True)
 
 lobj = ldap.initialize("ldap://{}".format(random.choice(cmdlargs.c)))
 lobj.set_option(ldap.OPT_PROTOCOL_VERSION, ldap.VERSION3)
+lobj.set_option(ldap.OPT_NETWORK_TIMEOUT, 5)
+lres = None # Get rid of an IDE warning when a var can be undefined coz its first assignment is in try-block
 
 # Get RootDSE
-lres = lobj.search_s(base="",
-                     scope=ldap.SCOPE_BASE,
-                     attrlist=("defaultNamingContext", "configurationNamingContext", "domainFunctionality",
-                               "serverName", "dnsHostName"))
+try:
+    lres = lobj.search_s(base="",
+                         scope=ldap.SCOPE_BASE,
+                         attrlist=("defaultNamingContext", "configurationNamingContext", "domainFunctionality",
+                                   "serverName", "dnsHostName"))
+except ldap.LDAPError as lexcp:
+    handle_ldap_exception(lexcp)
 rootDSE = cidict(lres[0][1])
 
 # Bind
