@@ -19,7 +19,10 @@ class ldap_exception_handler:
             self.print_traceback = print_traceback
         if do_exit is not None:
             self.do_exit = do_exit
-        print >> sys.stderr, "LDAP error has happened: {}".format(ldap_exception.message["desc"])
+        ldap_err_desc = ""
+        if "desc" in ldap_exception.message:
+            ldap_err_desc = ": " + ldap_exception.message["desc"]
+        print >> sys.stderr, "LDAP error has happened{}".format(ldap_err_desc)
         if "info" in ldap_exception.message:
             print >> sys.stderr, "This means that:\n  {}".format(ldap_exception.message["info"])
         if self.print_traceback:
