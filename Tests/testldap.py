@@ -3,6 +3,8 @@ import argparse, random, ldap, sys, traceback
 from ldap.cidict import cidict
 from ldap.controls.simple import ValueLessRequestControl
 from uuid import UUID
+from datetime import datetime
+from dateutil import tz
 
 cmdlnparser = argparse.ArgumentParser(description="Get users from AD")
 cmdlnparser.add_argument("-c", help="AD controller(s)", action="append", required=True)
@@ -11,7 +13,7 @@ cmdlnparser.add_argument("-p", help="AD password", default="")
 cmdlargs = cmdlnparser.parse_args()
 
 
-class ldap_exception_handler:
+class LdapExceptionHandler:
     def __init__(self, print_traceback=True, do_exit=False):
         self.print_traceback = print_traceback
         self.do_exit = do_exit
@@ -33,7 +35,7 @@ class ldap_exception_handler:
         if self.do_exit:
             sys.exit(1)
 
-handle_ldap_exception = ldap_exception_handler(do_exit=True)
+handle_ldap_exception = LdapExceptionHandler(do_exit=True)
 
 
 lobj = ldap.initialize("ldap://{}".format(random.choice(cmdlargs.c)))
@@ -52,6 +54,16 @@ except ldap.LDAPError as lexcp:
     handle_ldap_exception(lexcp)
 rootDSE = cidict(lres[0][1])
 
+domain_functionality = {"0":"WIN2000", "1":"WIN2003 WITH MIXED DOMAINS", "2":"WIN2003", "3":"WIN2008", "4":"WIN2008R2",
+                        "5":"WIN2012", "6":"WIN2012R2", "7":"WIN2016"}
+current_domain_functionality = "UNKNOWN"
+try:
+    current_domain_functionality = domain_functionality[rootDSE["domainFunctionality"][0]]
+except KeyError:
+    pass
+print "Connected to the LDAP at {}".format(rootDSE["dnsHostName"][0])
+print "Current domain functionality is {}\n".format(current_domain_functionality)
+
 # Bind
 try:
     lobj.bind_s(cmdlargs.u, cmdlargs.p)
@@ -69,22 +81,32 @@ except ldap.LDAPError as lexcp:
 domainAttrs = cidict(lres[0][1])
 
 # Get user accounts
+account_attrs = ("name", "userPrincipalName", "displayName", "objectGUID", "userAccountControl", "usnChanged",
+                 "whenChanged", "isDeleted")
 try:
     lres = lobj.search_ext_s(base=rootDSE["defaultNamingContext"][0],
                              scope=ldap.SCOPE_SUBTREE,
-                             filterstr="(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=512)"
-                                       "(userPrincipalName=*)(!(servicePrincipalName=*)))",
-                             attrlist=("userPrincipalName", "displayName", "objectGUID", "userAccountControl", "usnChanged", "whenChanged", "isDeleted"),
+                             filterstr="(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=512))",
+                             attrlist=account_attrs,
                              serverctrls=(ValueLessRequestControl(controlType="1.2.840.113556.1.4.417"),))
 except ldap.LDAPError as lexcp:
     handle_ldap_exception(lexcp)
+attr_len = max(map(len, account_attrs))
 for lentry in lres:
     if lentry[0] is None: # 'None' DN (referral) shall be sorted out
         continue
     print "DN: {}".format(lentry[0])
-    for lattrname, lattrvalue in lentry[1].items():
-        if lattrname.lower() == "objectGUID".lower():
-            valtoprint = str(UUID(bytes=UUID(bytes=lattrvalue[0]).bytes_le))
+    attrs = cidict(lentry[1])
+    for attrname in account_attrs:
+        try:
+            attrvalue = attrs[attrname][0]
+        except KeyError:
+            continue
+        if attrname.lower() == "objectGUID".lower():
+            valtoprint = str(UUID(bytes=UUID(bytes=attrvalue).bytes_le))
+        elif attrname.lower() == "whenChanged".lower():
+            valtoprint = datetime.strptime(attrvalue, "%Y%m%d%H%M%S.0Z").replace(tzinfo=tz.gettz('UTC')).astimezone(tz.tzlocal())
         else:
-            valtoprint = lattrvalue[0]
-        print "  {}: {}".format(lattrname, valtoprint)
+            valtoprint = attrvalue
+        print (2 * " " + "{:>" + str(attr_len) + "}: {}").format(attrname, valtoprint)
+    print "\n"
