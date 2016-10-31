@@ -5,6 +5,7 @@ from ldap.controls.simple import ValueLessRequestControl
 from uuid import UUID
 from datetime import datetime
 from dateutil import tz
+from tabulate import tabulate
 
 cmdlnparser = argparse.ArgumentParser(description="Get users from AD")
 cmdlnparser.add_argument("-c", help="AD controller(s)", action="append", required=True)
@@ -92,21 +93,31 @@ try:
 except ldap.LDAPError as lexcp:
     handle_ldap_exception(lexcp)
 attr_len = max(map(len, account_attrs))
+attr_table = []
 for lentry in lres:
     if lentry[0] is None: # 'None' DN (referral) shall be sorted out
         continue
     print "DN: {}".format(lentry[0])
     attrs = cidict(lentry[1])
+    attr_row = []
     for attrname in account_attrs:
         try:
             attrvalue = attrs[attrname][0]
         except KeyError:
+            attr_row.append("N/A")
             continue
         if attrname.lower() == "objectGUID".lower():
             valtoprint = str(UUID(bytes=UUID(bytes=attrvalue).bytes_le))
         elif attrname.lower() == "whenChanged".lower():
-            valtoprint = datetime.strptime(attrvalue, "%Y%m%d%H%M%S.0Z").replace(tzinfo=tz.gettz('UTC')).astimezone(tz.tzlocal())
+            valtoprint = datetime.strptime(attrvalue, "%Y%m%d%H%M%S.0Z")\
+                .replace(tzinfo=tz.gettz('UTC'))\
+                .astimezone(tz.tzlocal())\
+                .strftime("%Y-%m-%d %H:%M:%S")
         else:
             valtoprint = attrvalue
+        attr_row.append(valtoprint)
         print (2 * " " + "{:>" + str(attr_len) + "}: {}").format(attrname, valtoprint)
+    attr_table.append(attr_row)
     print "\n"
+
+print tabulate(attr_table, headers=account_attrs)
