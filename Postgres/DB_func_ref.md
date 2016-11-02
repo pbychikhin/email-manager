@@ -35,6 +35,11 @@ Returns a string (or NULL) of login names for postfix when it's checking for mat
 Requires at least repeatable read isolation level.  
 Returns 'PLAIN' plus an account password in clear text (or NULL) for SASL auth. This is in accordance to Dovecot's specification.
 
+* **_GetDomainData(sp_name TEXT) RETURNS TABLE_**  
+`sp_name` is a domain name.  
+This function is a substitute for a select statement. But it also hides database logic under the hood.  
+Returns the following domain properties: `name`, `spooldir`, `active`, `public`, `ad_sync_enabled`, `created`, `modified`.
+
 
 ## Data adding
 

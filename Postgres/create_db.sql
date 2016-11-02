@@ -299,6 +299,14 @@ CREATE OR REPLACE FUNCTION sasl_getpass(sp_name TEXT) RETURNS TEXT AS $$
     LANGUAGE plpgsql;
 
 
+CREATE OR REPLACE FUNCTION GetDomainData(sp_name TEXT) RETURNS TABLE (name TEXT, spooldir TEXT, active BOOLEAN,
+                    public BOOLEAN, ad_sync_enabled BOOLEAN, created TIMESTAMP(0) WITH TIME ZONE,
+                    modified TIMESTAMP(0) WITH TIME ZONE) AS $$
+    SELECT name, spooldir, active, public, ad_sync_enabled, created, modified
+        FROM domain WHERE name LIKE sp_name ORDER BY modified; $$
+    LANGUAGE sql;
+
+
 CREATE OR REPLACE FUNCTION VALUE_OR_DEFAULT(sp_var BOOLEAN) RETURNS TEXT AS $$
     BEGIN
         IF (sp_var IS NOT NULL) THEN
