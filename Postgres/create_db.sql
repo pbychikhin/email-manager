@@ -303,7 +303,18 @@ CREATE OR REPLACE FUNCTION GetDomainData(sp_name TEXT) RETURNS TABLE (name TEXT,
                     public BOOLEAN, ad_sync_enabled BOOLEAN, created TIMESTAMP(0) WITH TIME ZONE,
                     modified TIMESTAMP(0) WITH TIME ZONE) AS $$
     SELECT name, spooldir, active, public, ad_sync_enabled, created, modified
-        FROM domain WHERE name LIKE sp_name ORDER BY modified; $$
+        FROM domain WHERE lower(name) LIKE lower(sp_name) ORDER BY modified; $$
+    LANGUAGE sql;
+
+
+CREATE OR REPLACE FUNCTION GetAccountData(sp_domain TEXT, sp_name TEXT, sp_fullname TEXT) RETURNS TABLE (
+                    name TEXT, password TEXT, fullname TEXT, spooldir TEXT, active BOOLEAN, public BOOLEAN,
+                    password_enabled BOOLEAN, ad_sync_enabled BOOLEAN, created TIMESTAMP(0) WITH TIME ZONE,
+                    modified TIMESTAMP(0) WITH TIME ZONE, accessed TIMESTAMP(0) WITH TIME ZONE) AS $$
+    SELECT name, password, fullname, spooldir, active, public, password_enabled, ad_sync_enabled,
+        created, modified, accessed
+        FROM account, GetDomain(sp_domain) AS (d_id INTEGER, d_name TEXT)
+        WHERE lower(name) LIKE lower(sp_name) AND lower(fullname) LIKE lower(sp_fullname) AND domain_id = d_id; $$
     LANGUAGE sql;
 
 

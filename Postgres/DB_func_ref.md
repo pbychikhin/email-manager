@@ -164,7 +164,7 @@ Raises an exception with hint which has to be caught by the control process.
 `sp_silent` is a flag indication that the routing shall not raise exceptions in case it can't find data.  
 Both `sp_isolated` and `sp_silent` default to FALSE which means the routine sets up explicit locks and raises exceptions. So it is convenient for data changing utilities.  
 Returns a record of an integer domain ID and a textual domain name. Both default to NULL.  
-May rise an exception with hint which has to be caught by the control process.
+May raise an exception with hint which has to be caught by the control process.
 
 * **_VALUE_OR_DEFAULT(sp_var BOOLEAN) RETURNS TEXT_**  
 `sp_var` - a boolean var which can either be null or not null.  
