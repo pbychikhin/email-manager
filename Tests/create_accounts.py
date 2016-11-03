@@ -1,6 +1,6 @@
 
 
-import argparse
+import argparse, sys, psycopg2, petname
 
 cmdlnparser = argparse.ArgumentParser(description="Create some random accounts in the email DB")
 cmdlnparser.add_argument("--dbhost", help = "DB connection host")
@@ -11,8 +11,6 @@ cmdlnparser.add_argument("--domain", help = "Email domain to operate with")
 cmdlnparser.add_argument("--num", help="Number of accounts to be created", type=int, default=100)
 cmdlargs = cmdlnparser.parse_args()
 
-import sys
-import psycopg2
 
 dbconn = psycopg2.connect(host = cmdlargs.dbhost, database = cmdlargs.dbname, user = cmdlargs.user,
                           password = cmdlargs.password)
@@ -45,8 +43,6 @@ else:
 finally:
     dbcur.close()
 
-
-import petname
 
 pets = {}
 
