@@ -36,9 +36,17 @@ Requires at least repeatable read isolation level.
 Returns 'PLAIN' plus an account password in clear text (or NULL) for SASL auth. This is in accordance to Dovecot's specification.
 
 * **_GetDomainData(sp_name TEXT) RETURNS TABLE_**  
-`sp_name` is a domain name.  
+`sp_name` is a domain name. If it is NULL, all domains will be selected.  
 This function is a substitute for a select statement. But it also hides database logic under the hood.  
 Returns the following domain properties: `name`, `spooldir`, `active`, `public`, `ad_sync_enabled`, `created`, `modified`.
+
+* **_GetAccountData(sp_domain TEXT, sp_name TEXT, sp_fullname TEXT)_**  
+`sp_domain` is a domain name. If it is NULL, the default domain will be used.  
+`sp_name` is an account name. If it is NULL, all account names will be selected.  
+`sp_fullname` is an account full name. If it is NULL, all account full names (including NULL) will be selected.  
+This function is a substitute for a select statement. But it also hides database logic under the hood.  
+Returns the following domain properties: `name`, `password`, `fullname`, `spooldir`, `active`, `public`, `password_enabled`, `ad_sync_enabled`,
+`created`, `modified`, `accessed`.
 
 
 ## Data adding
