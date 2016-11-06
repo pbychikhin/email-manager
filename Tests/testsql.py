@@ -10,7 +10,7 @@ cmdlnparser.add_argument("--domain", help="Email domain to operate with")
 cmdlargs = cmdlnparser.parse_args()
 
 
-class PgExceptionHandler:
+class PgBaseExceptionHandler:
 
     def __init__(self, print_traceback=True, do_exit=False):
         self.print_traceback = print_traceback
@@ -30,25 +30,29 @@ class PgExceptionHandler:
             sys.exit(1)
 
     def handler(self, pg_exception_info):
-        pass
+        self.do_reraise = True
 
 
-class PgUserExceptionHandler(PgExceptionHandler):
+class PgGenericExceptionHandler(PgBaseExceptionHandler):
 
     def handler(self, pg_exception_info):
-        pg_ex_obj = pg_exception_info[1]
-        pg_ex_traceback = pg_exception_info[2]
-        if pg_ex_obj.pgcode == "P0001":
-            print >>sys.stderr, "Error interacting with data"
-            print pg_ex_obj.diag.message_primary
-            if pg_ex_obj.diag.message_hint:
-                print >>sys.stderr, "Hint: ", pg_ex_obj.diag.message_hint
-        else:
-            self.do_reraise = True
+        pg_ex_obj, pg_ex_traceback = pg_exception_info[1:3]
+        print >> sys.stderr, pg_ex_obj.args[0]
+        if pg_ex_obj.diag.message_primary:
+            print >>sys.stderr, pg_ex_obj.diag.message_primary
+        if pg_ex_obj.diag.message_hint:
+            print >>sys.stderr, "Hint: ", pg_ex_obj.diag.message_hint
+        if self.print_traceback:
+            print >> sys.stderr, "Occurred at:"
+            traceback.print_tb(pg_ex_traceback, limit=1)
 
 
-handle_pg_exception = PgUserExceptionHandler(do_exit=True)
+handle_pg_exception = PgGenericExceptionHandler(do_exit=True)
 
-dbconn = psycopg2.connect(host = cmdlargs.dbhost, database = cmdlargs.dbname, user = cmdlargs.user,
-                          password = cmdlargs.password, application_name = os.path.basename(sys.argv[0]))
+dbconn = None
+try:
+    dbconn = psycopg2.connect(host = cmdlargs.dbhost, database = cmdlargs.dbname, user = cmdlargs.user,
+                              password = cmdlargs.password, application_name = os.path.basename(sys.argv[0]))
+except psycopg2.Error as pgex:
+    handle_pg_exception(sys.exc_info())
 dbcur = dbconn.cursor()
