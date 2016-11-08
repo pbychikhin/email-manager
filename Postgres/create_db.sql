@@ -313,7 +313,7 @@ CREATE OR REPLACE FUNCTION GetAccountData(sp_domain TEXT, sp_name TEXT, sp_fulln
                     modified TIMESTAMP(0) WITH TIME ZONE, accessed TIMESTAMP(0) WITH TIME ZONE) AS $$
     SELECT name, password, fullname, spooldir, active, public, password_enabled, ad_sync_enabled,
         created, modified, accessed
-        FROM account, GetDomain(sp_domain) AS (d_id INTEGER, d_name TEXT)
+        FROM account, GetDomain(sp_domain, TRUE, TRUE) AS (d_id INTEGER, d_name TEXT)
         WHERE
             lower(name) LIKE CASE WHEN sp_name IS NOT NULL THEN lower(sp_name) ELSE '%' END AND
             CASE WHEN sp_fullname IS NOT NULL THEN lower(fullname) LIKE lower(sp_fullname) ELSE fullname LIKE '%' OR fullname IS NULL END AND

@@ -37,11 +37,12 @@ class PgGenericExceptionHandler(PgBaseExceptionHandler):
 
     def handler(self, pg_exception_info):
         pg_ex_obj, pg_ex_traceback = pg_exception_info[1:3]
-        print >> sys.stderr, pg_ex_obj.args[0]
         if pg_ex_obj.diag.message_primary:
             print >>sys.stderr, pg_ex_obj.diag.message_primary
-        if pg_ex_obj.diag.message_hint:
-            print >>sys.stderr, "Hint: ", pg_ex_obj.diag.message_hint
+            if pg_ex_obj.diag.message_hint:
+                print >>sys.stderr, "Hint: ", pg_ex_obj.diag.message_hint
+        else:
+            print >> sys.stderr, pg_ex_obj.args[0]
         if self.print_traceback:
             print >> sys.stderr, "Occurred at:"
             traceback.print_tb(pg_ex_traceback, limit=1)
@@ -56,3 +57,21 @@ try:
 except psycopg2.Error as pgex:
     handle_pg_exception(sys.exc_info())
 dbcur = dbconn.cursor()
+
+accounts_header = ()  # get rid of warnings
+accounts_data = []  # get rid of warnings
+try:
+    dbcur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+    dbcur.execute("SELECT * FROM GetAccountData(%s, %s, %s)", (cmdlargs.domain, None, None))
+    accounts_header = tuple(item[0] for item in dbcur.description)
+    accounts_data = dbcur.fetchall()
+    dbconn.commit()
+except psycopg2.Error as pgex:
+    handle_pg_exception(sys.exc_info())
+
+attr_len = max(map(len, accounts_header))
+for item in accounts_data:
+    account = dict(zip(accounts_header, item))
+    for attr in accounts_header:
+        print ("{:>" + str(attr_len) + "}: {}").format(attr, account[attr])
+    print
