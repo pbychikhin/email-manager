@@ -36,4 +36,4 @@
         * **\[done\]** Create `flush_tracking.py`. This will flush activity tracking stamps (run UpdateAccountActivity()) once per specified time interval.
         All errors will be reported.
     * **\[done\]** Create `testldap.py`. This will get user data from AD and represent it using table and record views
-    * Create `testsql.py`. This will get user data from DB and represent using table and record views
+    * **\[done\]** Create `testsql.py`. This will get user data from DB and represent using table and record views

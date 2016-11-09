@@ -1,5 +1,7 @@
 
-import argparse, sys, os.path, psycopg2, traceback
+import argparse, sys, os.path, psycopg2, traceback, datetime
+from dateutil import tz
+from tabulate import tabulate
 
 cmdlnparser = argparse.ArgumentParser(description="Get users from DB")
 cmdlnparser.add_argument("--dbhost", help="DB connection host")
@@ -70,8 +72,19 @@ except psycopg2.Error as pgex:
     handle_pg_exception(sys.exc_info())
 
 attr_len = max(map(len, accounts_header))
+res_table = []
 for item in accounts_data:
     account = dict(zip(accounts_header, item))
+    res_row = []
     for attr in accounts_header:
-        print ("{:>" + str(attr_len) + "}: {}").format(attr, account[attr])
+        if isinstance(account[attr], datetime.datetime):
+            valtoprint = account[attr].astimezone(tz.tzlocal()).strftime("%Y-%m-%d %H:%M:%S")
+        elif isinstance(account[attr], bool):
+            valtoprint = "Yes" if account[attr] else "No"
+        else:
+            valtoprint = account[attr]
+        print ("{:>" + str(attr_len) + "}: {}").format(attr, valtoprint)
+        res_row.append(valtoprint)
     print
+    res_table.append(res_row)
+print tabulate(res_table, headers=accounts_header)
