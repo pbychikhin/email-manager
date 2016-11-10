@@ -14,29 +14,46 @@ cmdlnparser.add_argument("-p", help="AD password", default="")
 cmdlargs = cmdlnparser.parse_args()
 
 
-class LdapExceptionHandler:
+class LdapBaseExceptionHandler:
+
     def __init__(self, print_traceback=True, do_exit=False):
         self.print_traceback = print_traceback
         self.do_exit = do_exit
+        self.do_reraise = False
 
-    def __call__(self, ldap_exception, print_traceback=None, do_exit=None):
+    def __call__(self, ldap_exception_info, print_traceback=None, do_exit=None):
+        """ldap_exception_info is a sys.exc_info() return value"""
         if print_traceback is not None:
             self.print_traceback = print_traceback
         if do_exit is not None:
             self.do_exit = do_exit
+        self.handler(ldap_exception_info)
+        if self.do_reraise:
+            raise
+        elif self.do_exit:
+            sys.exit(1)
+
+    def handler(self, pg_exception_info):
+        self.do_reraise = True
+
+
+class LdapGenericExceptionHandler(LdapBaseExceptionHandler):
+
+    def handler(self, ldap_exception_info):
+        ldap_ex_obj, ldap_ex_traceback = ldap_exception_info[1:3]
         ldap_err_desc = ""
-        if "desc" in ldap_exception.args[0]:
-            ldap_err_desc = ": " + ldap_exception.args[0]["desc"]
+        if "desc" in ldap_ex_obj.args[0]:
+            ldap_err_desc = ": " + ldap_ex_obj.args[0]["desc"]
         print >> sys.stderr, "LDAP error has happened{}".format(ldap_err_desc)
-        if "info" in ldap_exception.args[0]:
-            print >> sys.stderr, "This means that:\n  {}".format(ldap_exception.args[0]["info"])
+        if "info" in ldap_ex_obj.args[0]:
+            print >> sys.stderr, "This means that:\n  {}".format(ldap_ex_obj.args[0]["info"])
         if self.print_traceback:
             print >> sys.stderr, "Occurred at:"
-            traceback.print_tb(sys.exc_info()[2], limit=1)
+            traceback.print_tb(ldap_ex_traceback, limit=1)
         if self.do_exit:
             sys.exit(1)
 
-handle_ldap_exception = LdapExceptionHandler(do_exit=True)
+handle_ldap_exception = LdapGenericExceptionHandler(do_exit=True)
 
 
 lobj = ldap.initialize("ldap://{}".format(random.choice(cmdlargs.c)))
@@ -51,8 +68,8 @@ try:
                          scope=ldap.SCOPE_BASE,
                          attrlist=("defaultNamingContext", "configurationNamingContext", "domainFunctionality",
                                    "serverName", "dnsHostName"))
-except ldap.LDAPError as lexcp:
-    handle_ldap_exception(lexcp)
+except ldap.LDAPError:
+    handle_ldap_exception(sys.exc_info())
 rootDSE = cidict(lres[0][1])
 
 domain_functionality = {"0":"WIN2000", "1":"WIN2003 WITH MIXED DOMAINS", "2":"WIN2003", "3":"WIN2008", "4":"WIN2008R2",
@@ -68,8 +85,8 @@ print "Current domain functionality is {}\n".format(current_domain_functionality
 # Bind
 try:
     lobj.bind_s(cmdlargs.u, cmdlargs.p)
-except ldap.LDAPError as lexcp:
-    handle_ldap_exception(lexcp)
+except ldap.LDAPError:
+    handle_ldap_exception(sys.exc_info())
 
 # Get domain
 try:
@@ -77,8 +94,8 @@ try:
                          scope=ldap.SCOPE_ONELEVEL,
                          filterstr="(&(objectClass=crossRef)(nCName={}))".format(rootDSE["defaultNamingContext"][0]),
                          attrlist=("dnsRoot", "nETBIOSName"))
-except ldap.LDAPError as lexcp:
-    handle_ldap_exception(lexcp)
+except ldap.LDAPError:
+    handle_ldap_exception(sys.exc_info())
 domainAttrs = cidict(lres[0][1])
 
 # Get user accounts
@@ -90,8 +107,8 @@ try:
                              filterstr="(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=512))",
                              attrlist=account_attrs,
                              serverctrls=(ValueLessRequestControl(controlType="1.2.840.113556.1.4.417"),))
-except ldap.LDAPError as lexcp:
-    handle_ldap_exception(lexcp)
+except ldap.LDAPError:
+    handle_ldap_exception(sys.exc_info())
 attr_len = max(map(len, account_attrs))
 attr_table = []
 for lentry in lres:

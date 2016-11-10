@@ -56,7 +56,7 @@ dbconn = None
 try:
     dbconn = psycopg2.connect(host = cmdlargs.dbhost, database = cmdlargs.dbname, user = cmdlargs.user,
                               password = cmdlargs.password, application_name = os.path.basename(sys.argv[0]))
-except psycopg2.Error as pgex:
+except psycopg2.Error:
     handle_pg_exception(sys.exc_info())
 dbcur = dbconn.cursor()
 
@@ -68,7 +68,7 @@ try:
     accounts_header = tuple(item[0] for item in dbcur.description)
     accounts_data = dbcur.fetchall()
     dbconn.commit()
-except psycopg2.Error as pgex:
+except psycopg2.Error:
     handle_pg_exception(sys.exc_info())
 
 attr_len = max(map(len, accounts_header))
