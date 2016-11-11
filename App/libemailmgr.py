@@ -2,6 +2,9 @@
 import sys, traceback
 
 
+inifile = "emailmgr.ini"
+
+
 class EmailmgrBaseExceptionHandler:
 
     def __init__(self, print_traceback=True, do_exit=False):
@@ -27,31 +30,43 @@ class EmailmgrBaseExceptionHandler:
 
 class PgGenericExceptionHandler(EmailmgrBaseExceptionHandler):
 
-    def handler(self, pg_exception_info):
-        pg_ex_obj, pg_ex_traceback = pg_exception_info[1:3]
-        if pg_ex_obj.diag.message_primary:
-            print >>sys.stderr, pg_ex_obj.diag.message_primary
-            if pg_ex_obj.diag.message_hint:
-                print >>sys.stderr, "Hint: ", pg_ex_obj.diag.message_hint
+    def handler(self, exception_info):
+        ex_obj, ex_traceback = exception_info[1:3]
+        if ex_obj.diag.message_primary:
+            print >>sys.stderr, ex_obj.diag.message_primary
+            if ex_obj.diag.message_hint:
+                print >>sys.stderr, "Hint: ", ex_obj.diag.message_hint
         else:
-            print >> sys.stderr, pg_ex_obj.args[0]
+            print >>sys.stderr, ex_obj.args[0]
         if self.print_traceback:
-            print >> sys.stderr, "Occurred at:"
-            traceback.print_tb(pg_ex_traceback, limit=1)
+            print >>sys.stderr, "Occurred at:"
+            traceback.print_tb(ex_traceback, limit=1)
 
 
 class LdapGenericExceptionHandler(EmailmgrBaseExceptionHandler):
 
-    def handler(self, ldap_exception_info):
-        ldap_ex_obj, ldap_ex_traceback = ldap_exception_info[1:3]
+    def handler(self, exception_info):
+        ex_obj, ex_traceback = exception_info[1:3]
         ldap_err_desc = ""
-        if "desc" in ldap_ex_obj.args[0]:
-            ldap_err_desc = ": " + ldap_ex_obj.args[0]["desc"]
-        print >> sys.stderr, "LDAP error has happened{}".format(ldap_err_desc)
-        if "info" in ldap_ex_obj.args[0]:
-            print >> sys.stderr, "This means that:\n  {}".format(ldap_ex_obj.args[0]["info"])
+        if "desc" in ex_obj.args[0]:
+            ldap_err_desc = ": " + ex_obj.args[0]["desc"]
+        print >>sys.stderr, "LDAP error has happened{}".format(ldap_err_desc)
+        if "info" in ex_obj.args[0]:
+            print >>sys.stderr, "This means that:\n  {}".format(ex_obj.args[0]["info"])
         if self.print_traceback:
-            print >> sys.stderr, "Occurred at:"
-            traceback.print_tb(ldap_ex_traceback, limit=1)
+            print >>sys.stderr, "Occurred at:"
+            traceback.print_tb(ex_traceback, limit=1)
+        if self.do_exit:
+            sys.exit(1)
+
+
+class CfgGenericExceptionHandler(EmailmgrBaseExceptionHandler):
+
+    def handler(self, exception_info):
+        ex_obj, ex_traceback = exception_info[1:3]
+        print >>sys.stderr, "Configuration error: {}".format(ex_obj.message)
+        if self.print_traceback:
+            print >>sys.stderr, "Occurred at:"
+            traceback.print_tb(ex_traceback, limit=1)
         if self.do_exit:
             sys.exit(1)

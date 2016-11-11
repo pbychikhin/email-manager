@@ -40,6 +40,15 @@
 
 * Create the application
     * Create the library `libemailmgr.py`
-        * Add base exception handler class `EmailmgrBaseExceptionHandler`
-        * Add generic Postgres exception handler class `PgGenericExceptionHandler` based on the `EmailmgrBaseExceptionHandler`
-        * Add generic LDAP exception handler class `LdapGenericExceptionHandler` based on the `EmailmgrBaseExceptionHandler`
+        * **\[done\]** Add base exception handler class `EmailmgrBaseExceptionHandler`
+        * **\[done\]** Add generic Postgres exception handler class `PgGenericExceptionHandler` based on the `EmailmgrBaseExceptionHandler`
+        * **\[done\]** Add generic LDAP exception handler class `LdapGenericExceptionHandler` based on the `EmailmgrBaseExceptionHandler`
+        * **\[done\]** Define INI-file name as `emailmgr.ini`
+    * Create the main app `emailmgr.py`
+        * Read INI-file.
+        * Read cmd options: first option defines a working context (plugin name), other options are sent to the plugin.
+        * Call a plugin: create a plugin_class instance, call a process_function, catch an exception
+    * Create the plugins: `domain`, `account`, `alias`. Implement plugin interface as follows:
+        * plugin_class(ini_data, cmd_data).
+        * plugin_class.process_function.
+        * plugin_class.exception
