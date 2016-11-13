@@ -31,6 +31,7 @@ class EmailmgrBaseExceptionHandler:
 class PgGenericExceptionHandler(EmailmgrBaseExceptionHandler):
 
     def handler(self, exception_info):
+        # TODO: simplify this handler by analogy with CfgGenericExceptionHandler (just print the exception object)
         ex_obj, ex_traceback = exception_info[1:3]
         if ex_obj.diag.message_primary:
             print >>sys.stderr, ex_obj.diag.message_primary
@@ -64,7 +65,20 @@ class CfgGenericExceptionHandler(EmailmgrBaseExceptionHandler):
 
     def handler(self, exception_info):
         ex_obj, ex_traceback = exception_info[1:3]
-        print >>sys.stderr, "Configuration error: {}".format(ex_obj.message)
+        # print >>sys.stderr, "Configuration error: {}".format(ex_obj.message)
+        print >> sys.stderr, "Configuration error: {}".format(ex_obj)
+        if self.print_traceback:
+            print >>sys.stderr, "Occurred at:"
+            traceback.print_tb(ex_traceback, limit=1)
+        if self.do_exit:
+            sys.exit(1)
+
+
+class CfgReadExceptionHandler(EmailmgrBaseExceptionHandler):
+
+    def handler(self, exception_info):
+        ex_obj, ex_traceback = exception_info[1:3]
+        print >>sys.stderr, "Configuration read error: {}".format(ex_obj)
         if self.print_traceback:
             print >>sys.stderr, "Occurred at:"
             traceback.print_tb(ex_traceback, limit=1)

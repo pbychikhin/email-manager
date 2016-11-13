@@ -46,6 +46,7 @@
         * **\[done\]** Define INI-file name as `emailmgr.ini`
     * Create the main app `emailmgr.py`
         * Read INI-file.
+        * Establish a database connection
         * Read cmd options: first option defines a working context (plugin name), other options are sent to the plugin.
         * Call a plugin: create a plugin_class instance, call a process_function, catch an exception
     * Create the plugins: `domain`, `account`, `alias`. Implement plugin interface as follows:
