@@ -1,0 +1,4 @@
+
+[Core]
+Name = domain
+Module = Domain

@@ -1,9 +1,18 @@
 
 import libemailmgr, ConfigParser, argparse, sys, os.path, psycopg2
-plugins = ("domain", "account", "alias")
+from yapsy.PluginManager import PluginManager
 
+# TODO: remove the lines below when testing is over
+# import logging
+# logging.basicConfig(level=logging.DEBUG)
 
 app_dir = os.path.dirname(sys.argv[0])
+
+# Load plugins
+PM = PluginManager()
+PM.setPluginPlaces(("Plugins",))
+PM.collectPlugins()
+plugin_names = tuple(sorted(plugin_info.name for plugin_info in PM.getAllPlugins()))
 
 # Parse INI-file
 handle_cfg_exception = libemailmgr.CfgGenericExceptionHandler(do_exit=True)
@@ -25,9 +34,16 @@ try:
                               application_name = os.path.basename(sys.argv[0]))
 except psycopg2.Error:
     handle_pg_exception(sys.exc_info())
+except ConfigParser.Error:
+    handle_cfg_exception(sys.exc_info())
 
-cmdparser = argparse.ArgumentParser(description="Email system manager")
-cmdparser.add_argument("context", help="Execution context", choices=plugins)
-cmdargs = cmdparser.parse_args(sys.argv[1:2])
+# Get context
+cmd = argparse.ArgumentParser(description="Email system manager")
+try:
+    cmd.add_argument("context", help="Execution context", choices=plugin_names, nargs="?",
+                     default=cfg.get("call", "context"))
+except ConfigParser.Error:
+    handle_cfg_exception(sys.exc_info())
 
-print "Doing {}".format(cmdargs.context)
+# Run the plugin
+PM.getPluginByName(cmd.context).plugin_object.configure(cfg, cmd, dbconn)

@@ -1,0 +1,17 @@
+
+[connect]
+host = 192.168.111.10
+database = emailmgr
+user = emailmgr_manager
+password = emailmgr_manager
+
+[call]
+context = account
+
+[account]
+action = query
+password_gen_min = 8
+password_gen_max = 8
+
+[domain]
+action = query
