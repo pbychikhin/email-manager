@@ -10,7 +10,7 @@ app_dir = os.path.dirname(sys.argv[0])
 
 # Load plugins
 PM = PluginManager()
-PM.setPluginPlaces(("Plugins",))
+PM.setPluginPlaces((app_dir + "/Plugins",))
 PM.collectPlugins()
 plugin_names = tuple(sorted(plugin_info.name for plugin_info in PM.getAllPlugins()))
 
@@ -42,8 +42,10 @@ cmd = argparse.ArgumentParser(description="Email system manager")
 try:
     cmd.add_argument("context", help="Execution context", choices=plugin_names, nargs="?",
                      default=cfg.get("call", "context"))
+    cmd.add_argument("contextargs", help="Arguments relevant in a chosen context", nargs=argparse.REMAINDER)
 except ConfigParser.Error:
     handle_cfg_exception(sys.exc_info())
+args = cmd.parse_args()
 
 # Run the plugin
-PM.getPluginByName(cmd.context).plugin_object.configure(cfg, cmd, dbconn)
+PM.getPluginByName(args.context).plugin_object.configure(args.context, cfg, args.contextargs, dbconn)
