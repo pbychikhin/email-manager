@@ -4,6 +4,7 @@
 * [Data querying](#data-quering)
 * [Data adding](#data-adding)
 * [Data deleting](#data-deleting)
+* [Data changing](#data-changing)
 * [Utility](#utility)
 * [Miscellaneous](#miscellaneous)
 
