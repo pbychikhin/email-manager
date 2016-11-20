@@ -5,6 +5,8 @@ import sys, traceback
 inifile = "emailmgr.ini"
 
 
+# Exceptions
+
 class EmailmgrBaseExceptionHandler:
 
     def __init__(self, print_traceback=True, do_exit=False):

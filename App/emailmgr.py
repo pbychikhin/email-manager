@@ -3,6 +3,7 @@ import libemailmgr, ConfigParser, argparse, sys, os.path, psycopg2
 from yapsy.PluginManager import PluginManager
 
 # TODO: remove the lines below when testing is over
+# TODO: and think out a way to enable debug from outside of the source (from config)
 # import logging
 # logging.basicConfig(level=logging.DEBUG)
 
@@ -49,3 +50,4 @@ args = cmd.parse_args()
 
 # Run the plugin
 PM.getPluginByName(args.context).plugin_object.configure(args.context, cfg, args.contextargs, dbconn)
+PM.getPluginByName(args.context).plugin_object.process()
