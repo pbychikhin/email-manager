@@ -5,6 +5,18 @@ import sys, traceback
 inifile = "emailmgr.ini"
 
 
+# Routines
+
+def GetPrettyAttrs(attrs, translations):
+    attrs_pretty = {}
+    for item in attrs:
+        if item in translations.keys():
+            attrs_pretty[item] = translations[item]
+        else:
+            attrs_pretty[item] = item.capitalize()
+    return attrs_pretty
+
+
 # Exceptions
 
 class EmailmgrBaseExceptionHandler:

@@ -1,8 +1,14 @@
 
-import libemailmgr, ConfigParser, sys, argparse, os.path, psycopg2, datetime
+import libemailmgr, ConfigParser, sys, argparse, os.path, psycopg2, datetime, validators
 from yapsy.IPlugin import IPlugin
 from tabulate import tabulate
 from dateutil import tz
+try:
+    import msvcrt
+    getch = msvcrt.getch
+except ImportError:
+    import getch
+    getch = getch.getch
 
 
 handle_cfg_exception = libemailmgr.CfgGenericExceptionHandler(do_exit=True)
@@ -25,7 +31,8 @@ class domain(IPlugin):
         except ConfigParser.Error:
             handle_cfg_exception(sys.exc_info())
         cmd.add_argument("-name", help="Name of the domain")
-        cmd.set_defaults(active=None, public=None, adsync=None)
+        cmd.add_argument("-newname", help="New name when renaming")
+        cmd.set_defaults(name=None, newname=None, active=None, public=None, adsync=None)
         cmd.add_argument("-r", help="Record-style view", action="store_true", default=False)
         cmdgroup = cmd.add_mutually_exclusive_group()
         cmdgroup.add_argument("-active", help="Activate the domain", dest="active", action='store_true')
@@ -52,12 +59,12 @@ class domain(IPlugin):
             self.db.commit()
         except psycopg2.Error:
             handle_pg_exception(sys.exc_info())
-        data_header_pretty = {}
-        for row in data_header:
-            if row == "ad_sync_enabled":
-                data_header_pretty[row] = "AD sync enabled"
+        data_header_pretty = {} # TODO: modify code below to leverage GetPrettyAttrs
+        for item in data_header:
+            if item == "ad_sync_enabled":
+                data_header_pretty[item] = "AD sync"
             else:
-                data_header_pretty[row] = row.capitalize()
+                data_header_pretty[item] = item.capitalize()
         attr_pretty_len = max(map(len, data_header_pretty.values()))
         res_table = []
         for data_row in data:
@@ -79,3 +86,44 @@ class domain(IPlugin):
             res_table.append(res_row)
         if not self.args.r:
             print tabulate(res_table, headers=tuple(data_header_pretty[key] for key in data_header))
+
+    def process_add(self):
+        attrs = ("name", "active", "public", "adsync")
+        attrs_pretty = libemailmgr.GetPrettyAttrs(attrs, {"adsync":"AD sync"})
+        attr_pretty_len = max(map(len, attrs_pretty.values()))
+        try:
+            validators.domain(self.args.name)
+        except validators.ValidationFailure:
+            print "Invalid domain name: \"{}\"".format(self.args.name)
+            sys.exit(1)
+        except TypeError:
+            print "No domain name defined"
+            sys.exit(1)
+        print "Adding domain with the attributes:"
+        is_attr_set = False
+        for item in attrs:
+            if getattr(self.args, item) is not None:
+                is_attr_set = True
+                if isinstance(getattr(self.args, item), bool):
+                    valtoprint = "Yes" if getattr(self.args, item) else "No"
+                else:
+                    valtoprint = getattr(self.args, item)
+                print ("{:>" + str(attr_pretty_len) + "}: {}").format(attrs_pretty[item], valtoprint)
+        if not is_attr_set:
+            print "{None}"
+        print
+        print "Press \"y\" to continue",
+        keystroke = getch()
+        if keystroke == "y" or keystroke == "Y":
+            print "[Ok]"
+            print "Adding domain... ",
+            sys.stderr.flush()
+            try:
+                self.dbc.callproc("domain_add", (self.args.name, self.args.active, self.args.public))
+            except psycopg2.Error:
+                handle_pg_exception(sys.exc_info())
+            else:
+                self.db.commit()
+            print "Done"
+        else:
+            print "[Cancel]"
