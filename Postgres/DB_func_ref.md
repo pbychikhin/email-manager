@@ -68,8 +68,8 @@ Raises an exception with hint which has to be caught by the control process.
 `sp_fullname` is an account full name (or a description). Can be NULL.  
 `sp_active` is a flag indicating whether the account is is action.  
 `sp_public` is a flag indication whether the account allows publishing int's name in the public address book.  
-Both `sp_active` and `sp_public` can be NULL. In this case they will be set to table's defaults.  
-`sp_domain` can also be NULL. In this case the default will be looked up.
+Both `sp_active` and `sp_public` can be NULL. In this case they will be set to table's defaults.
+`sp_domain` can also be NULL. In this case the default will be looked up.  
 Adds a new account.  
 Does not return.  
 Raises an exception with hint which has to be caught by the control process.
