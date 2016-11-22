@@ -91,13 +91,8 @@ class domain(IPlugin):
 
     def process_add(self):
         attrs = ("name", "active", "public")
-        try:
-            validators.domain(self.args.name)
-        except validators.ValidationFailure:
+        if self.args.name and not validators.domain(self.args.name):
             print "Invalid domain name: \"{}\"".format(self.args.name)
-            sys.exit(1)
-        except TypeError:
-            print "No domain name defined"
             sys.exit(1)
         print "Adding a domain with the attributes:"
         libemailmgr.PrintPrettyAttrs(self.args, attrs, libemailmgr.GetPrettyAttrs(attrs))
@@ -141,6 +136,9 @@ class domain(IPlugin):
 
     def process_mod(self):
         attrs = ("name", "newname", "active", "public", "adsync")
+        if self.args.newname and not validators.domain(self.args.newname):
+            print "Invalid domain name: \"{}\"".format(self.args.newname)
+            sys.exit(1)
         print "Modifying a domain with the attributes:"
         libemailmgr.PrintPrettyAttrs(self.args, attrs,
                                      libemailmgr.GetPrettyAttrs(attrs,{"newname":"New name", "adsync":"AD sync"}))
