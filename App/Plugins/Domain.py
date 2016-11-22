@@ -88,9 +88,9 @@ class domain(IPlugin):
             print tabulate(res_table, headers=tuple(data_header_pretty[key] for key in data_header))
 
     def process_add(self):
-        attrs = ("name", "active", "public", "adsync")
-        attrs_pretty = libemailmgr.GetPrettyAttrs(attrs, {"adsync":"AD sync"})
-        attr_pretty_len = max(map(len, attrs_pretty.values()))
+        attrs = ("name", "active", "public")
+        attrs_pretty = libemailmgr.GetPrettyAttrs(attrs)
+        attr_pretty_len = max(map(lambda x: len(x[1]) if getattr(self.args, x[0]) is not None else 0, attrs_pretty.items()))
         try:
             validators.domain(self.args.name)
         except validators.ValidationFailure:
@@ -99,7 +99,7 @@ class domain(IPlugin):
         except TypeError:
             print "No domain name defined"
             sys.exit(1)
-        print "Adding domain with the attributes:"
+        print "Adding a domain with the attributes:"
         is_attr_set = False
         for item in attrs:
             if getattr(self.args, item) is not None:

@@ -7,7 +7,7 @@ inifile = "emailmgr.ini"
 
 # Routines
 
-def GetPrettyAttrs(attrs, translations):
+def GetPrettyAttrs(attrs, translations={}):
     attrs_pretty = {}
     for item in attrs:
         if item in translations.keys():
