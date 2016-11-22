@@ -1,5 +1,6 @@
 
-import sys, traceback
+import sys, traceback, datetime
+from dateutil import tz
 
 
 inifile = "emailmgr.ini"
@@ -7,14 +8,32 @@ inifile = "emailmgr.ini"
 
 # Routines
 
-def GetPrettyAttrs(attrs, translations={}):
+def GetPrettyAttrs(attrs, translations=None):
     attrs_pretty = {}
+    if translations is None:
+        translations = {}
     for item in attrs:
         if item in translations.keys():
             attrs_pretty[item] = translations[item]
         else:
             attrs_pretty[item] = item.capitalize()
     return attrs_pretty
+
+def PrintPrettyAttrs(args, attrs, pretty_attrs):
+    pretty_attr_len = max(map(lambda x: len(x[1]) if getattr(args, x[0]) is not None else 0, pretty_attrs.items()))
+    is_attr_set = False
+    for item in attrs:
+        if getattr(args, item) is not None:
+            is_attr_set = True
+            if isinstance(getattr(args, item), bool):
+                valtoprint = "Yes" if getattr(args, item) else "No"
+            elif isinstance(getattr(args, item), datetime.datetime):
+                valtoprint = getattr(args, item).astimezone(tz.tzlocal()).strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                valtoprint = getattr(args, item)
+            print ("{:>" + str(pretty_attr_len) + "}: {}").format(pretty_attrs[item], valtoprint)
+    if not is_attr_set:
+        print "{None}"
 
 
 # Exceptions

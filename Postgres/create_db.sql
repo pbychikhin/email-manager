@@ -358,6 +358,11 @@ CREATE OR REPLACE FUNCTION domain_del(sp_name TEXT) RETURNS VOID AS $$
 		IF (NOT EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_name) FOR UPDATE)) THEN
 		    RAISE 'The domain % does not exist', sp_name;
 		END IF;
+		IF (EXISTS(SELECT * FROM tab_defaults, domain WHERE domain.name = sp_name AND
+		    tab_defaults.tab_name = 'domain' AND tab_defaults.tab_id = domain.id)) THEN
+		    RAISE 'The domain % is a default domain - may not be deleted', sp_name USING
+		        HINT = 'Make some other domain default first';
+		END IF;
 		IF (EXISTS(SELECT * FROM account WHERE domain_id = (SELECT id FROM domain WHERE lower(name) = lower(sp_name)))) THEN
             RAISE 'The domain % still has linked accounts', sp_name USING
                 HINT = 'Please delete all linked accounts one by one before deleting a domain';

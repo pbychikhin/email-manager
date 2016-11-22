@@ -1,4 +1,6 @@
 
+# TODO: find a way to detect input locale
+
 import libemailmgr, ConfigParser, sys, argparse, os.path, psycopg2, datetime, validators
 from yapsy.IPlugin import IPlugin
 from tabulate import tabulate
@@ -89,8 +91,6 @@ class domain(IPlugin):
 
     def process_add(self):
         attrs = ("name", "active", "public")
-        attrs_pretty = libemailmgr.GetPrettyAttrs(attrs)
-        attr_pretty_len = max(map(lambda x: len(x[1]) if getattr(self.args, x[0]) is not None else 0, attrs_pretty.items()))
         try:
             validators.domain(self.args.name)
         except validators.ValidationFailure:
@@ -100,17 +100,7 @@ class domain(IPlugin):
             print "No domain name defined"
             sys.exit(1)
         print "Adding a domain with the attributes:"
-        is_attr_set = False
-        for item in attrs:
-            if getattr(self.args, item) is not None:
-                is_attr_set = True
-                if isinstance(getattr(self.args, item), bool):
-                    valtoprint = "Yes" if getattr(self.args, item) else "No"
-                else:
-                    valtoprint = getattr(self.args, item)
-                print ("{:>" + str(attr_pretty_len) + "}: {}").format(attrs_pretty[item], valtoprint)
-        if not is_attr_set:
-            print "{None}"
+        libemailmgr.PrintPrettyAttrs(self.args, attrs, libemailmgr.GetPrettyAttrs(attrs))
         print
         print "Press \"y\" to continue",
         keystroke = getch()
@@ -120,6 +110,50 @@ class domain(IPlugin):
             sys.stderr.flush()
             try:
                 self.dbc.callproc("domain_add", (self.args.name, self.args.active, self.args.public))
+            except psycopg2.Error:
+                handle_pg_exception(sys.exc_info())
+            else:
+                self.db.commit()
+            print "Done"
+        else:
+            print "[Cancel]"
+
+    def process_del(self):
+        attrs = ("name",)
+        print "Deleting a domain with the attributes:"
+        libemailmgr.PrintPrettyAttrs(self.args, attrs, libemailmgr.GetPrettyAttrs(attrs))
+        print
+        print "Press \"y\" to continue",
+        keystroke = getch()
+        if keystroke == "y" or keystroke == "Y":
+            print "[Ok]"
+            print "Deleting domain... ",
+            sys.stderr.flush()
+            try:
+                self.dbc.callproc("domain_del", (self.args.name,))
+            except psycopg2.Error:
+                handle_pg_exception(sys.exc_info())
+            else:
+                self.db.commit()
+            print "Done"
+        else:
+            print "[Cancel]"
+
+    def process_mod(self):
+        attrs = ("name", "newname", "active", "public", "adsync")
+        print "Modifying a domain with the attributes:"
+        libemailmgr.PrintPrettyAttrs(self.args, attrs,
+                                     libemailmgr.GetPrettyAttrs(attrs,{"newname":"New name", "adsync":"AD sync"}))
+        print
+        print "Press \"y\" to continue",
+        keystroke = getch()
+        if keystroke == "y" or keystroke == "Y":
+            print "[Ok]"
+            print "Modifying domain... ",
+            sys.stderr.flush()
+            try:
+                self.dbc.callproc("domain_mod", (self.args.name, self.args.newname, self.args.active, self.args.public,
+                                                 self.args.adsync))
             except psycopg2.Error:
                 handle_pg_exception(sys.exc_info())
             else:
