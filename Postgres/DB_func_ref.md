@@ -180,10 +180,18 @@ May raise an exception with hint which has to be caught by the control process.
 Returns a string which can either be 'TRUE' or 'FALSE' in case `sp_var` isn't NULL, or 'NULL' otherwise.  
 The use of this proc is arguable. It's just a shortcut for CASE ... WHEN ... THEN ...
 
+* **_GetDefaultDomain() RETURNS TEXT_**  
+Returns default domain name. One must be set by at least the create_db.sql script at the stage of system deployment.
+
+* **_SetDefaultDomain(sp_name TEXT) RETURNS VOID_**  
+`sp_name` - the name of domain which is designated to be default  
+Does not return.  
+Raises an exception which has to be caught by the control process.
 
 ## Miscellaneous
 
 * **_UpdateAccountActivity() RETURNS VOID_**  
 Updates account's `accessed` field and clears activity_tracking.  
 Should be called by a scheduler reasonably frequently so the tracking table will not inflate.  
+Requires at least repeatable read isolation level.  
 Does not return.

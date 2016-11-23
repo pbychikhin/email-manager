@@ -358,7 +358,7 @@ CREATE OR REPLACE FUNCTION domain_del(sp_name TEXT) RETURNS VOID AS $$
 		IF (NOT EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_name) FOR UPDATE)) THEN
 		    RAISE 'The domain % does not exist', sp_name;
 		END IF;
-		IF (EXISTS(SELECT * FROM tab_defaults, domain WHERE domain.name = sp_name AND
+		IF (EXISTS(SELECT * FROM tab_defaults, domain WHERE lower(domain.name) = lower(sp_name) AND
 		    tab_defaults.tab_name = 'domain' AND tab_defaults.tab_id = domain.id)) THEN
 		    RAISE 'The domain % is a default domain - may not be deleted', sp_name USING
 		        HINT = 'Make some other domain default first';
@@ -591,6 +591,29 @@ CREATE OR REPLACE FUNCTION alias_mod(sp_name TEXT, sp_newname TEXT, sp_value TEX
         END IF;
     END;$$
     LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE FUNCTION GetDefaultDomain() RETURNS TEXT AS $$
+    SELECT name from domain, tab_defaults WHERE tab_name = 'domain' AND domain.id = tab_id; $$
+    LANGUAGE sql;
+
+
+CREATE OR REPLACE FUNCTION SetDefaultDomain(sp_name TEXT) RETURNS VOID AS $$
+    BEGIN
+        PERFORM CheckTransactionIsolation('set default domain', '{"repeatable read", "serializable"}');
+        IF (NOT EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_name))) THEN
+            RAISE 'The domain % does not exist',sp_name;
+        END IF;
+        IF (EXISTS(SELECT * FROM tab_defaults WHERE tab_name = 'domain')) THEN
+            UPDATE tab_defaults SET tab_id = (SELECT id FROM domain WHERE lower(name) = lower(sp_name)) WHERE
+                tab_name = 'domain';
+        ELSE
+            INSERT INTO tab_defaults(tab_name, tab_id) VALUES
+                ('domain', (SELECT id FROM domain WHERE lower(name) = lower(sp_name)));
+        END IF;
+    END;$$
+    LANGUAGE plpgsql;
+
 
 
 -- Populate table `sysinfo`
