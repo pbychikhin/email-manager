@@ -185,6 +185,7 @@ Returns default domain name. One must be set by at least the create_db.sql scrip
 
 * **_SetDefaultDomain(sp_name TEXT) RETURNS VOID_**  
 `sp_name` - the name of domain which is designated to be default  
+Requires at least repeatable read isolation level.  
 Does not return.  
 Raises an exception which has to be caught by the control process.
 

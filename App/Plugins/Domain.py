@@ -24,7 +24,7 @@ class domain(IPlugin):
         cfg - config from INI-file, args - rest of args in chosen context, db - database connection
         """
         self.cfg = cfg
-        self.actions = ("query", "add", "del", "mod")
+        self.actions = ("query", "add", "del", "mod", "getdefault", "setdefault")
         cmd = argparse.ArgumentParser(prog=os.path.basename(sys.argv[0]) + " {}".format(whoami),
                                       description="Domain management")
         try:
@@ -152,6 +152,40 @@ class domain(IPlugin):
             try:
                 self.dbc.callproc("domain_mod", (self.args.name, self.args.newname, self.args.active, self.args.public,
                                                  self.args.adsync))
+            except psycopg2.Error:
+                handle_pg_exception(sys.exc_info())
+            else:
+                self.db.commit()
+            print "Done"
+        else:
+            print "[Cancel]"
+
+    def process_getdefault(self):
+        data = []
+        try:
+            self.dbc.execute("SELECT * FROM GetDefaultDomain()")
+            data_header = tuple(item[0] for item in self.dbc.description)
+            data = self.dbc.fetchall()
+            self.db.commit()
+        except psycopg2.Error:
+            handle_pg_exception(sys.exc_info())
+        for row in data:
+            print "Default domain: {}".format(row[0])
+
+    def process_setdefault(self):
+        attrs = ("name",)
+        print "Setting the default domain to the domain with the attributes:"
+        libemailmgr.PrintPrettyAttrs(self.args, attrs, libemailmgr.GetPrettyAttrs(attrs))
+        print
+        print "Press \"y\" to continue",
+        keystroke = getch()
+        if keystroke == "y" or keystroke == "Y":
+            print "[Ok]"
+            print "Modifying defaults... ",
+            sys.stderr.flush()
+            try:
+                self.dbc.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+                self.dbc.callproc("SetDefaultDomain", (self.args.name,))
             except psycopg2.Error:
                 handle_pg_exception(sys.exc_info())
             else:

@@ -10,6 +10,8 @@ from yapsy.PluginManager import PluginManager
 app_dir = os.path.dirname(sys.argv[0])
 
 # Load plugins
+# TODO: in case of error when loading a plugin, the PluginManager silently ignores that plugin
+# TODO: this is inacceptable. We need to find a way to detect errors of plugin loadings
 PM = PluginManager()
 PM.setPluginPlaces((app_dir + "/Plugins",))
 PM.collectPlugins()
