@@ -1,5 +1,5 @@
 
-import libemailmgr, configparser, sys, argparse, os.path, psycopg2, datetime, validators, codecs
+import libemailmgr, configparser, sys, argparse, os.path, psycopg2, datetime, validators
 from yapsy.IPlugin import IPlugin
 from tabulate import tabulate
 from dateutil import tz
