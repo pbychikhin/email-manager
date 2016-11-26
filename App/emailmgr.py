@@ -1,5 +1,7 @@
+#! python3
 
-import libemailmgr, ConfigParser, argparse, sys, os.path, psycopg2
+
+import libemailmgr, configparser, argparse, sys, os.path, psycopg2
 from yapsy.PluginManager import PluginManager
 
 # TODO: remove the lines below when testing is over
@@ -20,10 +22,10 @@ plugin_names = tuple(sorted(plugin_info.name for plugin_info in PM.getAllPlugins
 # Parse INI-file
 handle_cfg_exception = libemailmgr.CfgGenericExceptionHandler(do_exit=True)
 handle_cfg_read_exception = libemailmgr.CfgReadExceptionHandler(do_exit=True)
-cfg = ConfigParser.ConfigParser()
+cfg = configparser.ConfigParser()
 try:
-    cfg.readfp(open(os.path.join(app_dir, libemailmgr.inifile)))
-except ConfigParser.Error:
+    cfg.read_file(open(os.path.join(app_dir, libemailmgr.inifile)))
+except configparser.Error:
     handle_cfg_exception(sys.exc_info())
 except IOError:
     handle_cfg_read_exception(sys.exc_info())
@@ -37,7 +39,7 @@ try:
                               application_name = os.path.basename(sys.argv[0]))
 except psycopg2.Error:
     handle_pg_exception(sys.exc_info())
-except ConfigParser.Error:
+except configparser.Error:
     handle_cfg_exception(sys.exc_info())
 
 # Get context
@@ -46,7 +48,7 @@ try:
     cmd.add_argument("context", help="Execution context", choices=plugin_names, nargs="?",
                      default=cfg.get("call", "context"))
     cmd.add_argument("contextargs", help="Arguments relevant in a chosen context", nargs=argparse.REMAINDER)
-except ConfigParser.Error:
+except configparser.Error:
     handle_cfg_exception(sys.exc_info())
 args = cmd.parse_args()
 

@@ -20,7 +20,7 @@ def GetPrettyAttrs(attrs, translations=None):
     return attrs_pretty
 
 def PrintPrettyAttrs(args, attrs, pretty_attrs):
-    pretty_attr_len = max(map(lambda x: len(x[1]) if getattr(args, x[0]) is not None else 0, pretty_attrs.items()))
+    pretty_attr_len = max([len(x[1]) if getattr(args, x[0]) is not None else 0 for x in list(pretty_attrs.items())])
     is_attr_set = False
     for item in attrs:
         if getattr(args, item) is not None:
@@ -31,9 +31,9 @@ def PrintPrettyAttrs(args, attrs, pretty_attrs):
                 valtoprint = getattr(args, item).astimezone(tz.tzlocal()).strftime("%Y-%m-%d %H:%M:%S")
             else:
                 valtoprint = getattr(args, item)
-            print ("{:>" + str(pretty_attr_len) + "}: {}").format(pretty_attrs[item], valtoprint)
+            print(("{:>" + str(pretty_attr_len) + "}: {}").format(pretty_attrs[item], valtoprint))
     if not is_attr_set:
-        print "{None}"
+        print("{None}")
 
 
 # Exceptions
@@ -67,13 +67,13 @@ class PgGenericExceptionHandler(EmailmgrBaseExceptionHandler):
         # TODO: simplify this handler by analogy with CfgGenericExceptionHandler (just print the exception object)
         ex_obj, ex_traceback = exception_info[1:3]
         if ex_obj.diag.message_primary:
-            print >>sys.stderr, ex_obj.diag.message_primary
+            print(ex_obj.diag.message_primary, file=sys.stderr)
             if ex_obj.diag.message_hint:
-                print >>sys.stderr, "Hint: ", ex_obj.diag.message_hint
+                print("Hint: ", ex_obj.diag.message_hint, file=sys.stderr)
         else:
-            print >>sys.stderr, ex_obj.args[0]
+            print(ex_obj.args[0], file=sys.stderr)
         if self.print_traceback:
-            print >>sys.stderr, "Occurred at:"
+            print("Occurred at:", file=sys.stderr)
             traceback.print_tb(ex_traceback, limit=1)
 
 
@@ -84,11 +84,11 @@ class LdapGenericExceptionHandler(EmailmgrBaseExceptionHandler):
         ldap_err_desc = ""
         if "desc" in ex_obj.args[0]:
             ldap_err_desc = ": " + ex_obj.args[0]["desc"]
-        print >>sys.stderr, "LDAP error has happened{}".format(ldap_err_desc)
+        print("LDAP error has happened{}".format(ldap_err_desc), file=sys.stderr)
         if "info" in ex_obj.args[0]:
-            print >>sys.stderr, "This means that:\n  {}".format(ex_obj.args[0]["info"])
+            print("This means that:\n  {}".format(ex_obj.args[0]["info"]), file=sys.stderr)
         if self.print_traceback:
-            print >>sys.stderr, "Occurred at:"
+            print("Occurred at:", file=sys.stderr)
             traceback.print_tb(ex_traceback, limit=1)
         if self.do_exit:
             sys.exit(1)
@@ -99,9 +99,9 @@ class CfgGenericExceptionHandler(EmailmgrBaseExceptionHandler):
     def handler(self, exception_info):
         ex_obj, ex_traceback = exception_info[1:3]
         # print >>sys.stderr, "Configuration error: {}".format(ex_obj.message)
-        print >> sys.stderr, "Configuration error: {}".format(ex_obj)
+        print("Configuration error: {}".format(ex_obj), file=sys.stderr)
         if self.print_traceback:
-            print >>sys.stderr, "Occurred at:"
+            print("Occurred at:", file=sys.stderr)
             traceback.print_tb(ex_traceback, limit=1)
         if self.do_exit:
             sys.exit(1)
@@ -111,9 +111,9 @@ class CfgReadExceptionHandler(EmailmgrBaseExceptionHandler):
 
     def handler(self, exception_info):
         ex_obj, ex_traceback = exception_info[1:3]
-        print >>sys.stderr, "Configuration read error: {}".format(ex_obj)
+        print("Configuration read error: {}".format(ex_obj), file=sys.stderr)
         if self.print_traceback:
-            print >>sys.stderr, "Occurred at:"
+            print("Occurred at:", file=sys.stderr)
             traceback.print_tb(ex_traceback, limit=1)
         if self.do_exit:
             sys.exit(1)
