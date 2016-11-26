@@ -53,7 +53,7 @@ class EmailmgrBaseExceptionHandler:
             self.do_exit = do_exit
         self.handler(exception_info)
         if self.do_reraise:
-            raise
+            raise  # TODO: PyCharm beleives this syntax is not correct no more since Python 3.5. Needs to be re-checked
         elif self.do_exit:
             sys.exit(1)
 

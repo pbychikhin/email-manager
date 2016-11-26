@@ -1,6 +1,4 @@
 
-# TODO: find a way to detect input locale
-
 import libemailmgr, configparser, sys, argparse, os.path, psycopg2, datetime, validators, codecs
 from yapsy.IPlugin import IPlugin
 from tabulate import tabulate
