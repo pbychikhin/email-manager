@@ -4,20 +4,7 @@
 import libemailmgr, configparser, argparse, sys, os.path, psycopg2
 from yapsy.PluginManager import PluginManager
 
-# TODO: remove the lines below when testing is over
-# TODO: and think out a way to enable debug from outside of the source (from config)
-# import logging
-# logging.basicConfig(level=logging.DEBUG)
-
 app_dir = os.path.dirname(sys.argv[0])
-
-# Load plugins
-# TODO: in case of error when loading a plugin, the PluginManager silently ignores that plugin
-# TODO: this is inacceptable. We need to find a way to detect errors of plugin loadings
-PM = PluginManager()
-PM.setPluginPlaces((app_dir + "/Plugins",))
-PM.collectPlugins()
-plugin_names = tuple(sorted(plugin_info.name for plugin_info in PM.getAllPlugins()))
 
 # Parse INI-file
 handle_cfg_exception = libemailmgr.CfgGenericExceptionHandler(do_exit=True)
@@ -29,6 +16,20 @@ except configparser.Error:
     handle_cfg_exception(sys.exc_info())
 except IOError:
     handle_cfg_read_exception(sys.exc_info())
+
+# Enable logging based on a switch from cfg
+if cfg.getboolean("misc", "debug", fallback=False):
+    print(cfg.getboolean("misc", "debug", fallback=False))
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+
+# Load plugins
+# TODO: in case of error when loading a plugin, the PluginManager silently ignores that plugin
+# TODO: this is inacceptable. We need to find a way to detect errors of plugin loadings
+PM = PluginManager()
+PM.setPluginPlaces((app_dir + "/Plugins",))
+PM.collectPlugins()
+plugin_names = tuple(sorted(plugin_info.name for plugin_info in PM.getAllPlugins()))
 
 # Connect to the DB
 dbconn = None
