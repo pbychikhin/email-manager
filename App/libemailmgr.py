@@ -19,6 +19,7 @@ def GetPrettyAttrs(attrs, translations=None):
             attrs_pretty[item] = item.capitalize()
     return attrs_pretty
 
+
 def PrintPrettyAttrs(args, attrs, pretty_attrs):
     pretty_attr_len = max([len(x[1]) if getattr(args, x[0]) is not None else 0 for x in list(pretty_attrs.items())])
     is_attr_set = False

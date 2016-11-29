@@ -59,12 +59,7 @@ class domain(IPlugin):
             self.db.commit()
         except psycopg2.Error:
             handle_pg_exception(sys.exc_info())
-        data_header_pretty = {} # TODO: modify code below to leverage GetPrettyAttrs
-        for item in data_header:
-            if item == "ad_sync_enabled":
-                data_header_pretty[item] = "AD sync"
-            else:
-                data_header_pretty[item] = item.capitalize()
+        data_header_pretty = libemailmgr.GetPrettyAttrs(data_header, {"ad_sync_enabled":"AD sync"})
         attr_pretty_len = max(map(len, data_header_pretty.values()))
         res_table = []
         for data_row in data:
