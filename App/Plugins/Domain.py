@@ -1,8 +1,6 @@
 
-import libemailmgr, configparser, sys, argparse, os.path, psycopg2, datetime, validators
+import libemailmgr, configparser, sys, argparse, os.path, psycopg2, validators
 from yapsy.IPlugin import IPlugin
-from tabulate import tabulate
-from dateutil import tz
 try:
     import msvcrt
     getch = msvcrt.getwch  # Getting a unicode variant
@@ -15,7 +13,11 @@ handle_cfg_exception = libemailmgr.CfgGenericExceptionHandler(do_exit=True)
 handle_pg_exception = libemailmgr.PgGenericExceptionHandler(do_exit=True)
 
 
-class domain(IPlugin):
+class domain(IPlugin, libemailmgr.BaseProcessor):
+
+    def __init__(self):
+        IPlugin.__init__(self)
+        libemailmgr.BaseProcessor.__init__(self)
 
     def configure(self, whoami, cfg, args, db):
         """
@@ -46,41 +48,11 @@ class domain(IPlugin):
         self.args = cmd.parse_args(args)
         self.db = db
 
-    def process(self):
-        self.dbc = self.db.cursor()
-        exec("self.process_{}()".format(self.args.action))
-
     def process_query(self):
-        data, data_header = [], ()
-        try:
-            self.dbc.execute("SELECT * FROM GetDomainData(%s)", (self.args.name,))
-            data_header = tuple(item[0] for item in self.dbc.description)
-            data = self.dbc.fetchall()
-            self.db.commit()
-        except psycopg2.Error:
-            handle_pg_exception(sys.exc_info())
-        data_header_pretty = libemailmgr.GetPrettyAttrs(data_header, {"ad_sync_enabled":"AD sync"})
-        attr_pretty_len = max(map(len, data_header_pretty.values()))
-        res_table = []
-        for data_row in data:
-            data_item = dict(zip(data_header, data_row))
-            res_row = []
-            for attr in data_header:
-                attr_pretty = data_header_pretty[attr]
-                if isinstance(data_item[attr], datetime.datetime):
-                    valtoprint = data_item[attr].astimezone(tz.tzlocal()).strftime("%Y-%m-%d %H:%M:%S")
-                elif isinstance(data_item[attr], bool):
-                    valtoprint = "Yes" if data_item[attr] else "No"
-                else:
-                    valtoprint = data_item[attr]
-                if self.args.r:
-                    print(("{:>" + str(attr_pretty_len) + "}: {}").format(attr_pretty, valtoprint))
-                res_row.append(valtoprint)
-            if self.args.r:
-                print()
-            res_table.append(res_row)
-        if not self.args.r:
-            print(tabulate(res_table, headers=tuple(data_header_pretty[key] for key in data_header)))
+        self.query["body"] = "SELECT * FROM GetDomainData(%s)"
+        self.query["params"] = [self.args.name]
+        self.query["header_translations"] = {"ad_sync_enabled":"AD sync"}
+        libemailmgr.BaseProcessor.process_query(self)
 
     def process_add(self):
         attrs = ("name", "active", "public")

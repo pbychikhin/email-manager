@@ -1,6 +1,7 @@
 
-import sys, traceback, datetime
+import sys, traceback, datetime, psycopg2
 from dateutil import tz
+from tabulate import tabulate
 
 
 inifile = "emailmgr.ini"
@@ -9,6 +10,14 @@ inifile = "emailmgr.ini"
 # Routines
 
 def GetPrettyAttrs(attrs, translations=None):
+    """
+    Makes a list of attrs suitable for representation
+    :param attrs: a list of attributes
+    :param translations: a dictionary of attrs as keys and
+        translated attrs as values. An attr may or may not be in this list
+    :return: a dictionary with attrs and their translated counterparts
+    """
+
     attrs_pretty = {}
     if translations is None:
         translations = {}
@@ -21,6 +30,14 @@ def GetPrettyAttrs(attrs, translations=None):
 
 
 def PrintPrettyAttrs(args, attrs, pretty_attrs):
+    """
+    Prints a list of attrs with their values
+    :param args: an object with args - result of argparser
+    :param attrs: a list of attributes to be (or may be) printed
+    :param pretty_attrs: a list of transtlated attrs (see GetPrettyAttrs)
+    :return: none
+    """
+
     pretty_attr_len = max([len(x[1]) if getattr(args, x[0]) is not None else 0 for x in list(pretty_attrs.items())])
     is_attr_set = False
     for item in attrs:
@@ -35,6 +52,51 @@ def PrintPrettyAttrs(args, attrs, pretty_attrs):
             print(("{:>" + str(pretty_attr_len) + "}: {}").format(pretty_attrs[item], valtoprint))
     if not is_attr_set:
         print("{None}")
+
+
+# Classes
+
+class BaseProcessor:
+
+    def __init__(self):
+        self.handle_pg_exception = PgGenericExceptionHandler(do_exit=True)
+        self.query = {}
+
+    def process(self):
+        self.dbc = self.db.cursor()
+        exec("self.process_{}()".format(self.args.action))
+
+    def process_query(self):
+        data, data_header = [], []
+        try:
+            self.dbc.execute(self.query["body"], self.query["params"])
+            data_header = [item[0] for item in self.dbc.description]
+            data = self.dbc.fetchall()
+            self.db.commit()
+        except psycopg2.Error:
+            self.handle_pg_exception(sys.exc_info())
+        data_header_pretty = GetPrettyAttrs(data_header, self.query["header_translations"])
+        attr_pretty_len = max(map(len, data_header_pretty.values()))
+        res_table = []
+        for data_row in data:
+            data_item = dict(zip(data_header, data_row))
+            res_row = []
+            for attr in data_header:
+                attr_pretty = data_header_pretty[attr]
+                if isinstance(data_item[attr], datetime.datetime):
+                    valtoprint = data_item[attr].astimezone(tz.tzlocal()).strftime("%Y-%m-%d %H:%M:%S")
+                elif isinstance(data_item[attr], bool):
+                    valtoprint = "Yes" if data_item[attr] else "No"
+                else:
+                    valtoprint = data_item[attr]
+                if self.args.r:
+                    print(("{:>" + str(attr_pretty_len) + "}: {}").format(attr_pretty, valtoprint))
+                res_row.append(valtoprint)
+            if self.args.r:
+                print()
+            res_table.append(res_row)
+        if not self.args.r:
+            print(tabulate(res_table, headers=tuple(data_header_pretty[key] for key in data_header)))
 
 
 # Exceptions
