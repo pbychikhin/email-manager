@@ -1,7 +1,12 @@
 #! python3
 
 
-import libemailmgr, configparser, argparse, sys, os.path, psycopg2
+import libemailmgr
+import configparser
+import argparse
+import sys
+import os.path
+import psycopg2
 from yapsy.PluginManager import PluginManager
 
 app_dir = os.path.dirname(sys.argv[0])

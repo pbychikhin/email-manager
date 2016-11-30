@@ -1,5 +1,8 @@
 
-import sys, traceback, datetime, psycopg2
+import sys
+import traceback
+import datetime
+import psycopg2
 from dateutil import tz
 from tabulate import tabulate
 

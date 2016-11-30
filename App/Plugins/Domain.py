@@ -1,5 +1,11 @@
 
-import libemailmgr, configparser, sys, argparse, os.path, psycopg2, validators
+import libemailmgr
+import configparser
+import sys
+import argparse
+import os.path
+import psycopg2
+import validators
 from yapsy.IPlugin import IPlugin
 try:
     import msvcrt
