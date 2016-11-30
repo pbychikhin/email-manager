@@ -5,11 +5,17 @@ import libemailmgr
 import configparser
 import argparse
 import sys
+import platform
 import os.path
 import psycopg2
 from yapsy.PluginManager import PluginManager
+# Detect Windows and enable unicode
+if platform.system() == "Windows":  # TODO: check if it is really needed
+    import win_unicode_console
+    win_unicode_console.enable()
 
 app_dir = os.path.dirname(sys.argv[0])
+
 
 # Parse INI-file
 handle_cfg_exception = libemailmgr.CfgGenericExceptionHandler(do_exit=True)
