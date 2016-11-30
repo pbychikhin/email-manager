@@ -13,11 +13,12 @@ handle_cfg_exception = libemailmgr.CfgGenericExceptionHandler(do_exit=True)
 handle_pg_exception = libemailmgr.PgGenericExceptionHandler(do_exit=True)
 
 
-class domain(IPlugin, libemailmgr.BaseProcessor):
+class domain(IPlugin, libemailmgr.BasePlugin):
 
     def __init__(self):
         IPlugin.__init__(self)
-        libemailmgr.BaseProcessor.__init__(self)
+        libemailmgr.BasePlugin.__init__(self)
+        self.cfg, self.actions = None, None
 
     def configure(self, whoami, cfg, args, db):
         """
@@ -47,12 +48,13 @@ class domain(IPlugin, libemailmgr.BaseProcessor):
         cmdgroup.add_argument("-noadsync", help="Stop syncing the domain with AD", dest="adsync", action='store_false')
         self.args = cmd.parse_args(args)
         self.db = db
+        self.configured = True
 
     def process_query(self):
         self.query["body"] = "SELECT * FROM GetDomainData(%s)"
         self.query["params"] = [self.args.name]
         self.query["header_translations"] = {"ad_sync_enabled":"AD sync"}
-        libemailmgr.BaseProcessor.process_query(self)
+        libemailmgr.BasePlugin.process_query(self)
 
     def process_add(self):
         attrs = ("name", "active", "public")

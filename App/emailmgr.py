@@ -29,7 +29,7 @@ if cfg.getboolean("misc", "debug", fallback=False):
 PM = PluginManager()
 PM.setPluginPlaces((app_dir + "/Plugins",))
 PM.collectPlugins()
-plugin_names = tuple(sorted(plugin_info.name for plugin_info in PM.getAllPlugins()))
+plugin_names = sorted(plugin_info.name for plugin_info in PM.getAllPlugins())
 
 # Connect to the DB
 dbconn = None

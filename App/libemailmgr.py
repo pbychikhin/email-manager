@@ -56,13 +56,20 @@ def PrintPrettyAttrs(args, attrs, pretty_attrs):
 
 # Classes
 
-class BaseProcessor:
+class BasePlugin:
 
     def __init__(self):
         self.handle_pg_exception = PgGenericExceptionHandler(do_exit=True)
         self.query = {}
+        self.db, self.args, self.dbc = None, None, None  # get rid of warnings
+        self.configured = False
+
+    def configure(self, whoami, cfg, args, db):
+        raise NotImplementedError("The method 'configure' must be implemented in '{}' plugin".format(whoami))
 
     def process(self):
+        if not self.configured:
+            raise RuntimeError("The plugin wasn't configured. Please call 'configure' before calling 'process'")
         self.dbc = self.db.cursor()
         exec("self.process_{}()".format(self.args.action))
 
