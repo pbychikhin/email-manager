@@ -63,110 +63,47 @@ class domain(IPlugin, libemailmgr.BasePlugin):
         libemailmgr.BasePlugin.process_query(self)
 
     def process_add(self):
-        attrs = ("name", "active", "public")
+        self.process_vars["action_msg_1"] = "Adding a domain with the attributes:"
+        self.process_vars["action_msg_2"] = "Adding domain... "
+        self.process_vars["action_attrs"] = ["name", "active", "public"]
+        self.process_vars["action_proc"] = "domain_add"
+        self.process_vars["action_params"] = [self.args.name, self.args.active, self.args.public]
         if self.args.name and not validators.domain(self.args.name):
             print("Invalid domain name: \"{}\"".format(self.args.name))
             sys.exit(1)
-        print("Adding a domain with the attributes:")
-        libemailmgr.PrintPrettyAttrs(self.args, attrs, libemailmgr.GetPrettyAttrs(attrs))
-        print()
-        print("Press \"y\" to continue", end=' ')
-        sys.stdout.flush()
-        keystroke = getch()
-        if keystroke == "y" or keystroke == "Y":
-            print("[Ok]")
-            print("Adding domain... ", end=' ')
-            sys.stdout.flush()
-            try:
-                self.dbc.callproc("domain_add", (self.args.name, self.args.active, self.args.public))
-            except psycopg2.Error:
-                handle_pg_exception(sys.exc_info())
-            else:
-                self.db.commit()
-            print("Done")
-        else:
-            print("[Cancel]")
+        libemailmgr.BasePlugin.process_action(self)
 
     def process_del(self):
-        attrs = ("name",)
-        print("Deleting a domain with the attributes:")
-        libemailmgr.PrintPrettyAttrs(self.args, attrs, libemailmgr.GetPrettyAttrs(attrs))
-        print()
-        print("Press \"y\" to continue", end=' ')
-        sys.stdout.flush()
-        keystroke = getch()
-        if keystroke == "y" or keystroke == "Y":
-            print("[Ok]")
-            print("Deleting domain... ", end=' ')
-            sys.stdout.flush()
-            try:
-                self.dbc.callproc("domain_del", (self.args.name,))
-            except psycopg2.Error:
-                handle_pg_exception(sys.exc_info())
-            else:
-                self.db.commit()
-            print("Done")
-        else:
-            print("[Cancel]")
+        self.process_vars["action_msg_1"] = "Deleting a domain with the attributes:"
+        self.process_vars["action_msg_2"] = "Deleting domain... "
+        self.process_vars["action_attrs"] = ["name"]
+        self.process_vars["action_proc"] = "domain_del"
+        self.process_vars["action_params"] = [self.args.name]
+        libemailmgr.BasePlugin.process_action(self)
 
     def process_mod(self):
-        attrs = ("name", "newname", "active", "public", "adsync")
+        self.process_vars["action_msg_1"] = "Modifying a domain with the attributes:"
+        self.process_vars["action_msg_2"] = "Modifying domain... "
+        self.process_vars["action_attrs"] = ["name", "newname", "active", "public", "adsync"]
+        self.process_vars["action_proc"] = "domain_mod"
+        self.process_vars["action_params"] = [self.args.name, self.args.newname, self.args.active, self.args.public,
+                                              self.args.adsync]
         if self.args.newname and not validators.domain(self.args.newname):
             print("Invalid domain name: \"{}\"".format(self.args.newname))
             sys.exit(1)
-        print("Modifying a domain with the attributes:")
-        libemailmgr.PrintPrettyAttrs(self.args, attrs,
-                                     libemailmgr.GetPrettyAttrs(attrs,{"newname":"New name", "adsync":"AD sync"}))
-        print()
-        print("Press \"y\" to continue", end=' ')
-        sys.stdout.flush()
-        keystroke = getch()
-        if keystroke == "y" or keystroke == "Y":
-            print("[Ok]")
-            print("Modifying domain... ", end=' ')
-            sys.stdout.flush()
-            try:
-                self.dbc.callproc("domain_mod", (self.args.name, self.args.newname, self.args.active, self.args.public,
-                                                 self.args.adsync))
-            except psycopg2.Error:
-                handle_pg_exception(sys.exc_info())
-            else:
-                self.db.commit()
-            print("Done")
-        else:
-            print("[Cancel]")
+        libemailmgr.BasePlugin.process_action(self)
 
     def process_getdefault(self):
-        data = []
-        try:
-            self.dbc.execute("SELECT * FROM GetDefaultDomain()")
-            data_header = tuple(item[0] for item in self.dbc.description)
-            data = self.dbc.fetchall()
-            self.db.commit()
-        except psycopg2.Error:
-            handle_pg_exception(sys.exc_info())
-        for row in data:
-            print("Default domain: {}".format(row[0]))
+        self.process_vars["query_body"] = "SELECT * FROM GetDefaultDomain()"
+        self.process_vars["query_params"] = []
+        self.process_vars["query_header_translations"] = {"getdefaultdomain":"Default domain"}
+        libemailmgr.BasePlugin.process_query(self)
 
     def process_setdefault(self):
-        attrs = ("name",)
-        print("Setting the default domain to the domain with the attributes:")
-        libemailmgr.PrintPrettyAttrs(self.args, attrs, libemailmgr.GetPrettyAttrs(attrs))
-        print()
-        print("Press \"y\" to continue", end=' ')
-        sys.stdout.flush()
-        keystroke = getch()
-        if keystroke == "y" or keystroke == "Y":
-            print("[Ok]")
-            print("Modifying defaults... ", end=' ')
-            sys.stdout.flush()
-            try:
-                self.dbc.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-                self.dbc.callproc("SetDefaultDomain", (self.args.name,))
-            except psycopg2.Error:
-                handle_pg_exception(sys.exc_info())
-            else:
-                self.db.commit()
-            print("Done")
-        else:
-            print("[Cancel]")
+        self.process_vars["action_msg_1"] = "Setting the default domain to the domain with the attributes:"
+        self.process_vars["action_msg_2"] = "Modifying defaults... "
+        self.process_vars["action_attrs"] = ["name"]
+        self.process_vars["action_proc"] = "SetDefaultDomain"
+        self.process_vars["action_params"] = [self.args.name]
+        self.process_vars["action_settrans"] = libemailmgr.SQL_REPEATABLE_READ
+        libemailmgr.BasePlugin.process_action(self)

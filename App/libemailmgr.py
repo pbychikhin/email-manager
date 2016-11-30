@@ -5,9 +5,20 @@ import datetime
 import psycopg2
 from dateutil import tz
 from tabulate import tabulate
+try:
+    import msvcrt
+    getch = msvcrt.getwch  # Getting a unicode variant
+except ImportError:
+    import getch
+    getch = getch.getch  # TODO: This has to be tested on Unix: will getch get a unicode char?
 
 
 inifile = "emailmgr.ini"
+
+
+# Constants
+SQL_REPEATABLE_READ = "REPEATABLE READ"
+SQL_SERIALIZABLE = "SERIALIZABLE"
 
 
 # Routines
@@ -107,6 +118,29 @@ class BasePlugin:
             res_table.append(res_row)
         if not self.args.r:
             print(tabulate(res_table, headers=tuple(data_header_pretty[key] for key in data_header)))
+
+    def process_action(self):
+        print(self.process_vars["action_msg_1"])
+        PrintPrettyAttrs(self.args, self.process_vars["action_attrs"], GetPrettyAttrs(self.process_vars["action_attrs"]))
+        print()
+        print("Press \"y\" to continue", end=' ')
+        sys.stdout.flush()
+        keystroke = getch()
+        if keystroke == "y" or keystroke == "Y":
+            print("[Ok]")
+            print(self.process_vars["action_msg_2"], end=' ')
+            sys.stdout.flush()
+            try:
+                if "action_settrans" in self.process_vars:
+                    self.dbc.execute("SET TRANSACTION ISOLATION LEVEL {}".format(self.process_vars["action_settrans"]))
+                self.dbc.callproc(self.process_vars["action_proc"], self.process_vars["action_params"])
+            except psycopg2.Error:
+                self.handle_pg_exception(sys.exc_info())
+            else:
+                self.db.commit()
+            print("Done")
+        else:
+            print("[Cancel]")
 
 
 # Exceptions
