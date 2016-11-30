@@ -4,19 +4,10 @@ import configparser
 import sys
 import argparse
 import os.path
-import psycopg2
 import validators
 from yapsy.IPlugin import IPlugin
-try:
-    import msvcrt
-    getch = msvcrt.getwch  # Getting a unicode variant
-except ImportError:
-    import getch
-    getch = getch.getch  # TODO: This has to be tested on Unix: will getch get a unicode char?
 
 
-handle_cfg_exception = libemailmgr.CfgGenericExceptionHandler(do_exit=True)
-handle_pg_exception = libemailmgr.PgGenericExceptionHandler(do_exit=True)
 
 
 class domain(IPlugin, libemailmgr.BasePlugin):
@@ -38,7 +29,7 @@ class domain(IPlugin, libemailmgr.BasePlugin):
             cmd.add_argument("action", help="Action to be performed", choices=self.actions, nargs="?",
                              default=cfg.get("domain", "action"))
         except configparser.Error:
-            handle_cfg_exception(sys.exc_info())
+            self.handle_cfg_exception(sys.exc_info())
         cmd.add_argument("-name", help="Name of the domain")
         cmd.add_argument("-newname", help="New name when renaming")
         cmd.set_defaults(name=None, newname=None, active=None, public=None, adsync=None)

@@ -74,6 +74,7 @@ class BasePlugin:
 
     def __init__(self):
         self.handle_pg_exception = PgGenericExceptionHandler(do_exit=True)
+        self.handle_cfg_exception = CfgGenericExceptionHandler(do_exit=True)
         self.process_vars = {}
         self.db, self.args, self.dbc = None, None, None  # get rid of warnings
         self.configured = False
