@@ -57,9 +57,9 @@ class domain(IPlugin, libemailmgr.BasePlugin):
         self.configured = True
 
     def process_query(self):
-        self.query["body"] = "SELECT * FROM GetDomainData(%s)"
-        self.query["params"] = [self.args.name]
-        self.query["header_translations"] = {"ad_sync_enabled":"AD sync"}
+        self.process_vars["query_body"] = "SELECT * FROM GetDomainData(%s)"
+        self.process_vars["query_params"] = [self.args.name]
+        self.process_vars["query_header_translations"] = {"ad_sync_enabled":"AD sync"}
         libemailmgr.BasePlugin.process_query(self)
 
     def process_add(self):

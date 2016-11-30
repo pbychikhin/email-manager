@@ -63,7 +63,7 @@ class BasePlugin:
 
     def __init__(self):
         self.handle_pg_exception = PgGenericExceptionHandler(do_exit=True)
-        self.query = {}
+        self.process_vars = {}
         self.db, self.args, self.dbc = None, None, None  # get rid of warnings
         self.configured = False
 
@@ -79,13 +79,13 @@ class BasePlugin:
     def process_query(self):
         data, data_header = [], []
         try:
-            self.dbc.execute(self.query["body"], self.query["params"])
+            self.dbc.execute(self.process_vars["query_body"], self.process_vars["query_params"])
             data_header = [item[0] for item in self.dbc.description]
             data = self.dbc.fetchall()
             self.db.commit()
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
-        data_header_pretty = GetPrettyAttrs(data_header, self.query["header_translations"])
+        data_header_pretty = GetPrettyAttrs(data_header, self.process_vars["query_header_translations"])
         attr_pretty_len = max(map(len, data_header_pretty.values()))
         res_table = []
         for data_row in data:
