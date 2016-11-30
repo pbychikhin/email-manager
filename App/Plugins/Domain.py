@@ -8,8 +8,6 @@ import validators
 from yapsy.IPlugin import IPlugin
 
 
-
-
 class domain(IPlugin, libemailmgr.BasePlugin):
 
     def __init__(self):
