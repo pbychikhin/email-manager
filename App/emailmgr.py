@@ -10,7 +10,7 @@ import os.path
 import psycopg2
 from yapsy.PluginManager import PluginManager
 # Detect Windows and enable unicode
-if platform.system() == "Windows":  # TODO: check if it is really needed
+if platform.system() == "Windows":  # Seems needed (will not delve deep for the reason)
     import win_unicode_console
     win_unicode_console.enable()
 
