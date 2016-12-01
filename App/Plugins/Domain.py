@@ -73,7 +73,7 @@ class domain(IPlugin, libemailmgr.BasePlugin):
     def process_mod(self):
         self.process_vars["action_msg_1"] = "Modifying a domain with the attributes:"
         self.process_vars["action_msg_2"] = "Modifying domain... "
-        self.process_vars["action_attrs"] = ["name", "newname", "active", "public", "adsync"]
+        self.process_vars["action_attrs"] = ["name", "newname", "active", "public", "adsync"]  # TODO: add translation for 'adsync' attr
         self.process_vars["action_proc"] = "domain_mod"
         self.process_vars["action_params"] = [self.args.name, self.args.newname, self.args.active, self.args.public,
                                               self.args.adsync]
