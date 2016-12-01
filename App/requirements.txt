@@ -7,3 +7,4 @@ tabulate
 validators
 win-unicode-console
 Yapsy
+password-generator

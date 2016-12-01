@@ -76,6 +76,8 @@ class BasePlugin:
         self.handle_pg_exception = PgGenericExceptionHandler(do_exit=True)
         self.handle_cfg_exception = CfgGenericExceptionHandler(do_exit=True)
         self.process_vars = {}
+        self.process_vars["query_header_translations"] = {}
+        self.process_vars["action_attrs_translations"] = {}
         self.db, self.args, self.dbc = None, None, None  # get rid of warnings
         self.configured = False
 
@@ -91,6 +93,8 @@ class BasePlugin:
     def process_query(self):
         data, data_header = [], []
         try:
+            if "query_settrans" in self.process_vars:
+                self.dbc.execute("SET TRANSACTION ISOLATION LEVEL {}".format(self.process_vars["query_settrans"]))
             self.dbc.execute(self.process_vars["query_body"], self.process_vars["query_params"])
             data_header = [item[0] for item in self.dbc.description]
             data = self.dbc.fetchall()
@@ -122,7 +126,8 @@ class BasePlugin:
 
     def process_action(self):
         print(self.process_vars["action_msg_1"])
-        PrintPrettyAttrs(self.args, self.process_vars["action_attrs"], GetPrettyAttrs(self.process_vars["action_attrs"]))
+        PrintPrettyAttrs(self.args, self.process_vars["action_attrs"],
+                         GetPrettyAttrs(self.process_vars["action_attrs"], self.process_vars["action_attrs_translations"]))
         print()
         print("Press \"y\" to continue", end=' ')
         sys.stdout.flush()
