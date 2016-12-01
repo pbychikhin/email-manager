@@ -46,7 +46,7 @@ Returns the following domain properties: `name`, `spooldir`, `active`, `public`,
 `sp_name` is an account name. If it is NULL, all account names will be selected.  
 `sp_fullname` is an account full name. If it is NULL, all account full names (including NULL) will be selected.  
 This function is a substitute for a select statement. But it also hides database logic under the hood.  
-Returns the following domain properties: `name`, `password`, `fullname`, `spooldir`, `active`, `public`, `password_enabled`, `ad_sync_enabled`,
+Returns the following account properties: `name`, `password`, `fullname`, `spooldir`, `active`, `public`, `password_enabled`, `ad_sync_enabled`,
 `created`, `modified`, `accessed`.
 
 
