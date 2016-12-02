@@ -35,8 +35,10 @@ class account(IPlugin, libemailmgr.BasePlugin):
         cmd.add_argument("-password", help="Password of the account")
         cmd.add_argument("-fullname", help="Full name of the account")
         cmd.add_argument("-newname", help="New name when renaming")
-        cmd.set_defaults(domain=None, name=None, fullname=None, newname=None, password=None, active=None, public=None, adsync=None)
+        cmd.set_defaults(domain=None, name=None, fullname=None, newname=None, password=None, active=None,
+                         public=None, usepassword=None, adsync=None)
         cmd.add_argument("-r", help="Record-style view", action="store_true", default=False)
+        cmd.add_argument("-g", help="Generate random password", action="store_true", default=False)
         cmdgroup = cmd.add_mutually_exclusive_group()
         cmdgroup.add_argument("-active", help="Activate the account", dest="active", action='store_true')
         cmdgroup.add_argument("-noactive", help="Deactivate the account", dest="active", action='store_false')
@@ -44,8 +46,13 @@ class account(IPlugin, libemailmgr.BasePlugin):
         cmdgroup.add_argument("-public", help="Publish the account", dest="public", action='store_true')
         cmdgroup.add_argument("-nopublic", help="Unpublish the account", dest="public", action='store_false')
         cmdgroup = cmd.add_mutually_exclusive_group()
+        cmdgroup.add_argument("-usepassword", help="Use password from DB", dest="usepassword", action='store_true')
+        cmdgroup.add_argument("-nousepassword", help="Do not use password from DB",
+                              dest="usepassword", action='store_false')
+        cmdgroup = cmd.add_mutually_exclusive_group()
         cmdgroup.add_argument("-adsync", help="Sync the account with AD", dest="adsync", action='store_true')
-        cmdgroup.add_argument("-noadsync", help="Stop syncing the account with AD", dest="adsync", action='store_false')
+        cmdgroup.add_argument("-noadsync", help="Stop syncing the account with AD",
+                              dest="adsync", action='store_false')
         self.args = cmd.parse_args(args)
         self.db = db
         self.configured = True
@@ -63,22 +70,47 @@ class account(IPlugin, libemailmgr.BasePlugin):
         self.process_vars["action_attrs"] = ["domain", "name", "password", "fullname", "active", "public"]
         self.process_vars["action_attrs_translations"] = {"fullname": "Full name"}
         self.process_vars["action_proc"] = "account_add"
-        email_addr = self.args.name + "@" + (self.args.domain if self.args.domain is not None else "DEFAULT.DOMAIN")
-        if self.args.name and not validators.email(email_addr):
-            print("Invalid email: \"{}\"".format(email_addr))
-            sys.exit(1)
-        if self.args.password is None:
+        if self.args.name:
+            email_addr = self.args.name + "@" + (self.args.domain if self.args.domain is not None else "DEFAULT.DOMAIN")
+            if not validators.email(email_addr):
+                print("Invalid email: \"{}\"".format(email_addr))
+                sys.exit(1)
+        if self.args.name and self.args.password is None:
             password_gen_min = self.cfg.getint("account", "password_gen_min", fallback=8)
             password_gen_max = self.cfg.getint("account", "password_gen_max", fallback=8)
-            if password_gen_min <= 0:
-                password_gen_min = 8
-            if password_gen_max <= 0:
-                password_gen_max = 8
-            if password_gen_min > password_gen_max:
-                password_gen_tmp = password_gen_min
-                password_gen_min = password_gen_max
-                password_gen_max = password_gen_tmp
+            password_gen_min, password_gen_max = libemailmgr.check_password_length(password_gen_min, password_gen_max)
             self.args.password = password_generator.generate(length=random.randint(password_gen_min, password_gen_max))
         self.process_vars["action_params"] = [self.args.domain, self.args.name, self.args.password, self.args.fullname,
                                               self.args.active, self.args.public]
+        libemailmgr.BasePlugin.process_action(self)
+
+    def process_del(self):
+        self.process_vars["action_msg_1"] = "Deleting an account with the attributes:"
+        self.process_vars["action_msg_2"] = "Deleting account... "
+        self.process_vars["action_attrs"] = ["domain", "name"]
+        self.process_vars["action_proc"] = "account_del"
+        self.process_vars["action_params"] = [self.args.domain, self.args.name]
+        libemailmgr.BasePlugin.process_action(self)
+
+    def process_mod(self):
+        self.process_vars["action_msg_1"] = "Modifying an account with the attributes:"
+        self.process_vars["action_msg_2"] = "Modifying account... "
+        self.process_vars["action_attrs"] = ["domain", "name", "newname", "password", "fullname", "active", "public",
+                                             "usepassword", "adsync"]
+        self.process_vars["action_attrs_translations"] = {"newname": "New name", "fullname": "Full name",
+                                                          "usepassword": "Use password", "adsync": "AD sync"}
+        if self.args.g:
+            password_gen_min = self.cfg.getint("account", "password_gen_min", fallback=8)
+            password_gen_max = self.cfg.getint("account", "password_gen_max", fallback=8)
+            password_gen_min, password_gen_max = libemailmgr.check_password_length(password_gen_min, password_gen_max)
+            self.args.password = password_generator.generate(length=random.randint(password_gen_min, password_gen_max))
+        self.process_vars["action_proc"] = "account_mod"
+        if self.args.name:
+            email_addr = self.args.name + "@" + (self.args.domain if self.args.domain is not None else "DEFAULT.DOMAIN")
+            if not validators.email(email_addr):
+                print("Invalid email: \"{}\"".format(email_addr))
+                sys.exit(1)
+        self.process_vars["action_params"] = [self.args.domain, self.args.name, self.args.newname, self.args.password,
+                                              self.args.fullname, self.args.active, self.args.public,
+                                              self.args.usepassword, self.args.adsync]
         libemailmgr.BasePlugin.process_action(self)
