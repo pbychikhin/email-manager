@@ -142,7 +142,8 @@ class BasePlugin:
         print()
         print("Press \"y\" to continue", end=' ')
         sys.stdout.flush()
-        keystroke = getch()
+        # keystroke = getch()
+        keystroke = "y"
         if keystroke == "y" or keystroke == "Y":
             print("[Ok]")
             print(self.process_vars["action_msg_2"], end=' ')
