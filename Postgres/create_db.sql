@@ -484,7 +484,7 @@ CREATE OR REPLACE FUNCTION account_mod(sp_domain TEXT, sp_name TEXT, sp_newname 
 			    WHEN sp_ad_sync_enabled = TRUE AND sp_ad_sync_enabled <> old_ad_sync_enabled THEN TRUE
 				ELSE old_ad_sync_required END,
 			modified = CURRENT_TIMESTAMP
-			WHERE name = sp_name AND domain_id = (SELECT id FROM domain WHERE name = sp_domain);
+			WHERE name = sp_name AND domain_id = sp_domain_id;
 	END;$$
 	LANGUAGE plpgsql;
 
