@@ -97,7 +97,7 @@ Raises an exception with hint which has to be caught by the control process.
 * **_account_del(sp_domain TEXT, sp_name TEXT) RETURNS VOID_**  
 `sp_domain` is an account domain name.  
 `sp_name` is an accoun name.  
-Deletes an existing account. This is impossible if there still are accounts linked to that domain.  
+Deletes an existing account.  
 Does not return.  
 Raises an exception with hint which has to be caught by the control process.
 
