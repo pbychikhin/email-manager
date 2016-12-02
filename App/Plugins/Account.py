@@ -70,15 +70,16 @@ class account(IPlugin, libemailmgr.BasePlugin):
         if self.args.password is None:
             password_gen_min = self.cfg.getint("account", "password_gen_min", fallback=8)
             password_gen_max = self.cfg.getint("account", "password_gen_max", fallback=8)
-            if password_gen_min <= 0:
-                password_gen_min = 8
-            if password_gen_max <= 0:
-                password_gen_max = 8
-            if password_gen_min > password_gen_max:
-                password_gen_tmp = password_gen_min
-                password_gen_min = password_gen_max
-                password_gen_max = password_gen_tmp
+            password_gen_min, password_gen_max = libemailmgr.check_password_length(password_gen_min, password_gen_max)
             self.args.password = password_generator.generate(length=random.randint(password_gen_min, password_gen_max))
         self.process_vars["action_params"] = [self.args.domain, self.args.name, self.args.password, self.args.fullname,
                                               self.args.active, self.args.public]
+        libemailmgr.BasePlugin.process_action(self)
+
+    def process_del(self):
+        self.process_vars["action_msg_1"] = "Deleting an account with the attributes:"
+        self.process_vars["action_msg_2"] = "Deleting account... "
+        self.process_vars["action_attrs"] = ["domain", "name"]
+        self.process_vars["action_proc"] = "account_del"
+        self.process_vars["action_params"] = [self.args.domain, self.args.name]
         libemailmgr.BasePlugin.process_action(self)

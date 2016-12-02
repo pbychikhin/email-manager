@@ -68,6 +68,17 @@ def PrintPrettyAttrs(args, attrs, pretty_attrs):
         print("{None}")
 
 
+def check_password_length(len_min, len_max):
+    if len_min <= 0:
+        len_min = 8
+    if len_max <= 0:
+        len_max = 8
+    if len_min > len_max:
+        len_tmp = len_min
+        len_min = len_max
+        len_max = len_tmp
+    return len_min, len_max
+
 # Classes
 
 class BasePlugin:
