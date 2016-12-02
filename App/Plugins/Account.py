@@ -70,11 +70,12 @@ class account(IPlugin, libemailmgr.BasePlugin):
         self.process_vars["action_attrs"] = ["domain", "name", "password", "fullname", "active", "public"]
         self.process_vars["action_attrs_translations"] = {"fullname": "Full name"}
         self.process_vars["action_proc"] = "account_add"
-        email_addr = self.args.name + "@" + (self.args.domain if self.args.domain is not None else "DEFAULT.DOMAIN")
-        if self.args.name and not validators.email(email_addr):
-            print("Invalid email: \"{}\"".format(email_addr))
-            sys.exit(1)
-        if self.args.password is None:
+        if self.args.name:
+            email_addr = self.args.name + "@" + (self.args.domain if self.args.domain is not None else "DEFAULT.DOMAIN")
+            if not validators.email(email_addr):
+                print("Invalid email: \"{}\"".format(email_addr))
+                sys.exit(1)
+        if self.args.name and self.args.password is None:
             password_gen_min = self.cfg.getint("account", "password_gen_min", fallback=8)
             password_gen_max = self.cfg.getint("account", "password_gen_max", fallback=8)
             password_gen_min, password_gen_max = libemailmgr.check_password_length(password_gen_min, password_gen_max)
@@ -104,10 +105,11 @@ class account(IPlugin, libemailmgr.BasePlugin):
             password_gen_min, password_gen_max = libemailmgr.check_password_length(password_gen_min, password_gen_max)
             self.args.password = password_generator.generate(length=random.randint(password_gen_min, password_gen_max))
         self.process_vars["action_proc"] = "account_mod"
-        email_addr = self.args.name + "@" + (self.args.domain if self.args.domain is not None else "DEFAULT.DOMAIN")
-        if self.args.name and not validators.email(email_addr):
-            print("Invalid email: \"{}\"".format(email_addr))
-            sys.exit(1)
+        if self.args.name:
+            email_addr = self.args.name + "@" + (self.args.domain if self.args.domain is not None else "DEFAULT.DOMAIN")
+            if not validators.email(email_addr):
+                print("Invalid email: \"{}\"".format(email_addr))
+                sys.exit(1)
         self.process_vars["action_params"] = [self.args.domain, self.args.name, self.args.newname, self.args.password,
                                               self.args.fullname, self.args.active, self.args.public,
                                               self.args.usepassword, self.args.adsync]
