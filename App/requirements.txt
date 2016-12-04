@@ -1,5 +1,5 @@
 
-# Use 'pip install -r requirements.txt'
+# Use 'pip install --upgrade -r requirements.txt'
 
 psycopg2
 python-dateutil
