@@ -37,8 +37,6 @@ class account(IPlugin, libemailmgr.BasePlugin):
         cmd.add_argument("-newname", help="New name when renaming")
         cmd.set_defaults(domain=None, name=None, fullname=None, newname=None, password=None, active=None,
                          public=None, usepassword=None, adsync=None)
-        cmd.add_argument("-r", help="Record-style view", action="store_true", default=False)
-        cmd.add_argument("-g", help="Generate random password", action="store_true", default=False)
         cmdgroup = cmd.add_mutually_exclusive_group()
         cmdgroup.add_argument("-active", help="Activate the account", dest="active", action='store_true')
         cmdgroup.add_argument("-noactive", help="Deactivate the account", dest="active", action='store_false')
@@ -53,13 +51,16 @@ class account(IPlugin, libemailmgr.BasePlugin):
         cmdgroup.add_argument("-adsync", help="Sync the account with AD", dest="adsync", action='store_true')
         cmdgroup.add_argument("-noadsync", help="Stop syncing the account with AD",
                               dest="adsync", action='store_false')
+        cmd.add_argument("-r", help="Record-style view", action="store_true", default=False)
+        cmd.add_argument("-g", help="Generate random password", action="store_true", default=False)
+        cmd.add_argument("-s", help="Show password in query results", action="store_true", default=False)
         self.args = cmd.parse_args(args)
         self.db = db
         self.configured = True
 
     def process_query(self):
-        self.process_vars["query_body"] = "SELECT * FROM GetAccountData(%s, %s, %s)"
-        self.process_vars["query_params"] = [self.args.domain, self.args.name, self.args.fullname]
+        self.process_vars["query_body"] = "SELECT * FROM GetAccountData(%s, %s, %s, %s)"
+        self.process_vars["query_params"] = [self.args.domain, self.args.name, self.args.fullname, self.args.s]
         self.process_vars["query_header_translations"] = {"password_enabled": "Use password", "ad_sync_enabled": "AD sync"}
         self.process_vars["query_settrans"] = libemailmgr.SQL_REPEATABLE_READ
         libemailmgr.BasePlugin.process_query(self)

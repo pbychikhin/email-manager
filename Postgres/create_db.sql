@@ -307,12 +307,13 @@ CREATE OR REPLACE FUNCTION GetDomainData(sp_name TEXT) RETURNS TABLE (name TEXT,
     LANGUAGE sql;
 
 
-CREATE OR REPLACE FUNCTION GetAccountData(sp_domain TEXT, sp_name TEXT, sp_fullname TEXT) RETURNS TABLE (
+CREATE OR REPLACE FUNCTION GetAccountData(sp_domain TEXT, sp_name TEXT, sp_fullname TEXT, sp_showpassword BOOLEAN DEFAULT FALSE) RETURNS TABLE (
                     name TEXT, password TEXT, fullname TEXT, spooldir TEXT, active BOOLEAN, public BOOLEAN,
                     password_enabled BOOLEAN, ad_sync_enabled BOOLEAN, created TIMESTAMP(0) WITH TIME ZONE,
                     modified TIMESTAMP(0) WITH TIME ZONE, accessed TIMESTAMP(0) WITH TIME ZONE) AS $$
-    SELECT name, password, fullname, spooldir, active, public, password_enabled, ad_sync_enabled,
-        created, modified, accessed
+    SELECT name,
+        CASE sp_showpassword WHEN TRUE THEN password ELSE repeat('*', 8) END,
+        fullname, spooldir, active, public, password_enabled, ad_sync_enabled, created, modified, accessed
         FROM account, GetDomain(sp_domain, TRUE, TRUE) AS (d_id INTEGER, d_name TEXT)
         WHERE
             lower(name) LIKE CASE WHEN sp_name IS NOT NULL THEN lower(sp_name) ELSE '%' END AND
