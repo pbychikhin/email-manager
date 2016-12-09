@@ -323,6 +323,16 @@ CREATE OR REPLACE FUNCTION GetAccountData(sp_domain TEXT, sp_name TEXT, sp_fulln
     LANGUAGE sql;
 
 
+CREATE OR REPLACE FUNCTION GetAliasData(sp_name TEXT, sp_fullname TEXT) RETURNS TABLE (
+                    name TEXT, fullname TEXT, active BOOLEAN, public BOOLEAN,
+                    created TIMESTAMP(0) WITH TIME ZONE, modified TIMESTAMP(0) WITH TIME ZONE) AS $$
+    SELECT name, fullname, active, public, created, modified FROM alias_name WHERE
+        lower(name) LIKE CASE WHEN sp_name IS NOT NULL THEN lower(sp_name) ELSE '%' END AND
+        CASE WHEN sp_fullname IS NOT NULL THEN lower(fullname) LIKE lower(sp_fullname) ELSE fullname LIKE '%' OR fullname IS NULL END
+        ORDER BY name; $$
+    LANGUAGE sql;
+
+
 CREATE OR REPLACE FUNCTION VALUE_OR_DEFAULT(sp_var BOOLEAN) RETURNS TEXT AS $$
     BEGIN
         IF (sp_var IS NOT NULL) THEN
