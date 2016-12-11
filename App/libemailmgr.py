@@ -133,7 +133,11 @@ class BasePlugin:
                 print()
             res_table.append(res_row)
         if not self.args.r:
+            self.format_query_res_table(res_table, data_header)  # This is a hook to change res_table before printing it out
             print(tabulate(res_table, headers=tuple(data_header_pretty[key] for key in data_header)))
+
+    def format_query_res_table(self, table, header):
+        pass
 
     def process_action(self):
         print(self.process_vars["action_msg_1"])

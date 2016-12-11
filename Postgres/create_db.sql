@@ -333,6 +333,16 @@ CREATE OR REPLACE FUNCTION GetAliasData(sp_name TEXT, sp_fullname TEXT) RETURNS 
     LANGUAGE sql;
 
 
+CREATE OR REPLACE FUNCTION GetAliasList(sp_name TEXT, sp_value TEXT) RETURNS TABLE (
+                    name TEXT, value TEXT, active BOOLEAN, created TIMESTAMP(0) WITH TIME ZONE,
+                    modified TIMESTAMP(0) WITH TIME ZONE) AS $$
+    SELECT an.name, av.value, av.active, av.created, av.modified FROM alias_name an, alias_value av WHERE
+        lower(an.name) LIKE CASE WHEN sp_name IS NOT NULL THEN lower(sp_name) ELSE '%' END AND
+        lower(av.value) LIKE CASE WHEN sp_value IS NOT NULL THEN lower(sp_value) ELSE '%' END AND
+        an.id = av.name_id ORDER BY an.name, av.value; $$
+    LANGUAGE sql;
+
+
 CREATE OR REPLACE FUNCTION VALUE_OR_DEFAULT(sp_var BOOLEAN) RETURNS TEXT AS $$
     BEGIN
         IF (sp_var IS NOT NULL) THEN
