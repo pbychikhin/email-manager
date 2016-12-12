@@ -20,4 +20,13 @@ class alias(IPlugin, libemailmgr.BasePlugin):
         cfg - config from INI-file, args - rest of args in chosen context, db - database connection
         """
         self.cfg = cfg
-        self.actions = ("query", "add", "del", "mod")
+        self.actions = ("querydata", "querylist", "add", "del", "mod")
+        cmd = argparse.ArgumentParser(prog=os.path.basename(sys.argv[0]) + " {}".format(whoami),
+                                      description="Alias management")
+        try:
+            cmd.add_argument("action", help="Action to be performed", choices=self.actions, nargs="?",
+                             default=cfg.get("alias", "action"))
+        except configparser.Error:
+            self.handle_cfg_exception(sys.exc_info())
+        cmd.add_argument("-name", help="Name of the alias")
+
