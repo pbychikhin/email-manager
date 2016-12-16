@@ -49,11 +49,39 @@ class alias(IPlugin, libemailmgr.BasePlugin):
         self.configured = True
 
     def process_querydata(self):
-        if self.args.value is None:
-            self.process_vars["query_body"] = "SELECT * FROM GetAliasData(%s, %s)"
-            self.process_vars["query_params"] = [self.args.name, self.args.fullname]
-            self.process_vars["query_header_translations"] = {"fullname": "Full name"}
-        else:
-            self.process_vars["query_body"] = "SELECT * FROM GetAliasList(%s, %s)"
-            self.process_vars["query_params"] = [self.args.name, self.args.value]
+        self.process_vars["query_body"] = "SELECT * FROM GetAliasData(%s, %s)"
+        self.process_vars["query_params"] = [self.args.name, self.args.fullname]
+        self.process_vars["query_header_translations"] = {"fullname": "Full name"}
         libemailmgr.BasePlugin.process_query(self)
+
+    def process_querylist(self):
+        self.process_vars["query_body"] = "SELECT * FROM GetAliasList(%s, %s)"
+        self.process_vars["query_params"] = [self.args.name, self.args.value]
+        libemailmgr.BasePlugin.process_query(self)
+
+    def format_query_res_table(self, table, header):
+        pr_cell = None
+        counter = 0
+        for row in table:
+            if counter == 0:
+                counter += 1
+                pr_cell = row[0]
+                continue
+            if row[0] == pr_cell:
+                row[0] = ""
+            else:
+                pr_cell = row[0]
+
+    def process_add(self):
+        self.process_vars["action_msg_1"] = "Adding an alias with the attributes:"
+        self.process_vars["action_msg_2"] = "Adding alias... "
+        self.process_vars["action_attrs"] = ["name", "value", "fullname", "active", "public"]
+        self.process_vars["action_attrs_translations"] = {"fullname": "Full name"}
+        self.process_vars["action_proc"] = "alias_add"
+        for email_addr in self.args.name, self.args.value:
+            if not validators.email(email_addr):
+                print("Invalid email: \"{}\"".format(email_addr))
+                sys.exit(1)
+        self.process_vars["action_params"] = [self.args.name, self.args.value, self.args.fullname,
+                                              self.args.active, self.args.public]
+        libemailmgr.BasePlugin.process_action(self)
