@@ -16,5 +16,8 @@ password_gen_max = 8
 [domain]
 action = query
 
+[alias]
+action = querydata
+
 [misc]
 debug=off
