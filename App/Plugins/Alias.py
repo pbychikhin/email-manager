@@ -73,15 +73,44 @@ class alias(IPlugin, libemailmgr.BasePlugin):
                 pr_cell = row[0]
 
     def process_add(self):
+        for email_addr in self.args.name, self.args.value:
+            if email_addr is not None and not validators.email(email_addr):
+                print("Invalid email: \"{}\"".format(email_addr))
+                sys.exit(1)
         self.process_vars["action_msg_1"] = "Adding an alias with the attributes:"
         self.process_vars["action_msg_2"] = "Adding alias... "
         self.process_vars["action_attrs"] = ["name", "value", "fullname", "active", "public"]
         self.process_vars["action_attrs_translations"] = {"fullname": "Full name"}
         self.process_vars["action_proc"] = "alias_add"
-        for email_addr in self.args.name, self.args.value:
-            if not validators.email(email_addr):
-                print("Invalid email: \"{}\"".format(email_addr))
-                sys.exit(1)
         self.process_vars["action_params"] = [self.args.name, self.args.value, self.args.fullname,
                                               self.args.active, self.args.public]
+        libemailmgr.BasePlugin.process_action(self)
+
+    def process_del(self):
+        if self.args.value is None:
+            self.process_vars["action_msg_1"] = "Deleting an alias (and all its values!) with the attributes:"
+        else:
+            self.process_vars["action_msg_1"] = "Deleting an alias with the attributes:"
+        self.process_vars["action_msg_2"] = "Deleting alias... "
+        self.process_vars["action_attrs"] = ["name", "value"]
+        self.process_vars["action_proc"] = "alias_del"
+        self.process_vars["action_params"] = [self.args.name, self.args.value]
+        libemailmgr.BasePlugin.process_action(self)
+
+    def process_mod(self):
+        for email_addr in self.args.newname, self.args.newvalue:
+            if email_addr is not None and not validators.email(email_addr):
+                print("Invalid email: \"{}\"".format(email_addr))
+                sys.exit(1)
+        self.process_vars["action_msg_1"] = "Modifying an alias with the attributes:"
+        self.process_vars["action_attrs"] = ["name", "newname", "fullname", "value", "newvalue", "active", "public"]
+        if self.args.value is not None:
+            self.process_vars["action_msg_1"] = "Modifying an alias value with the attributes:"
+            self.process_vars["action_attrs"] = ["name", "value", "newvalue", "active"]
+        self.process_vars["action_msg_2"] = "Modifying alias... "
+        self.process_vars["action_attrs_translations"] = {"newname": "New name", "fullname": "Full name",
+                                                          "newvalue":"New value"}
+        self.process_vars["action_proc"] = "alias_mod"
+        self.process_vars["action_params"] = [self.args.name, self.args.newname, self.args.value, self.args.newvalue,
+                                              self.args.fullname, self.args.active, self.args.public]
         libemailmgr.BasePlugin.process_action(self)
