@@ -17,9 +17,9 @@
 Requires at least repeatable read isolation level.  
 Returns a relative path to an account maildir (or NULL).
 
-* **_GetSystem() RETURNS RECORD_**
+* **_GetSystem() RETURNS RECORD_**  
 Requires at least repeatable read isolation level.  
-Returns record of system name, major ver., minor ver., patch ver.
+Returns record of system name, major ver., minor ver., patch ver.  
 Should be called as `SELECT * from GetSystem() as (sysname TEXT, vmajor TEXT, vminor TEXT, vpatch TEXT)`
 
 * **_GetApacheDigAuth(sp_name TEXT, sp_realm TEXT) RETURNS TEXT_**  
