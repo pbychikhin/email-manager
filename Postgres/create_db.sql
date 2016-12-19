@@ -225,7 +225,7 @@ ALTER FUNCTION GetAccountSpoolDir(TEXT, client_proto) OWNER TO emailmgr_writer;
 ALTER FUNCTION GetAccountSpoolDir(TEXT, client_proto) SECURITY DEFINER;
 
 
-CREATE OR REPLACE FUNCTION GetFullSysName() RETURNS TEXT AS $$
+CREATE OR REPLACE FUNCTION GetSystem() RETURNS RECORD AS $$
     DECLARE
         sysname TEXT;
         vmajor TEXT;
@@ -233,12 +233,12 @@ CREATE OR REPLACE FUNCTION GetFullSysName() RETURNS TEXT AS $$
         vpatch TEXT;
     BEGIN
         -- If we need to lock rows we need to have write privs. So we'll use repeatable read instead.
-        PERFORM CheckTransactionIsolation( 'get system name', '{"repeatable read", "serializable"}');
+        PERFORM CheckTransactionIsolation('get system name', '{"repeatable read", "serializable"}');
         SELECT pvalue INTO sysname FROM sysinfo WHERE pname = 'sysname';
 		SELECT pvalue INTO vmajor FROM sysinfo WHERE pname = 'vmajor';
 		SELECT pvalue INTO vminor FROM sysinfo WHERE pname = 'vminor';
 		SELECT pvalue INTO vpatch FROM sysinfo WHERE pname = 'vpatch';
-		RETURN(LOWER(CONCAT_WS(':', sysname, vmajor, vminor, vpatch)));
+		RETURN(sysname, vmajor, vminor, vpatch);
 	END;$$
 	LANGUAGE plpgsql;
 
