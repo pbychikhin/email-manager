@@ -15,6 +15,13 @@ except ImportError:
 
 inifile = "emailmgr.ini"
 
+required_db = {
+    "sysname":"emailmgr",
+    "vmajor":"1",
+    "vminor":"0",
+    "vpatch":"0"
+}
+
 
 # Constants
 SQL_REPEATABLE_READ = "REPEATABLE READ"
@@ -79,6 +86,7 @@ def check_password_length(len_min, len_max):
         len_max = len_tmp
     return len_min, len_max
 
+
 # Classes
 
 class BasePlugin:
@@ -99,6 +107,22 @@ class BasePlugin:
         if not self.configured:
             raise RuntimeError("The plugin wasn't configured. Please call 'configure' before calling 'process'")
         self.dbc = self.db.cursor()
+        db_info_header, db_info_data = None, None
+        try:
+            self.dbc.execute("SET TRANSACTION ISOLATION LEVEL {}".format(SQL_REPEATABLE_READ))
+            self.dbc.execute("SELECT * from GetSystem() as (sysname TEXT, vmajor TEXT, vminor TEXT, vpatch TEXT)")
+            db_info_header = [item[0] for item in self.dbc.description]
+            db_info_data = self.dbc.fetchone()
+            self.db.commit()
+        except psycopg2.Error:
+            self.handle_pg_exception(sys.exc_info())
+        self.db_info = dict(zip(db_info_header, db_info_data))
+        for key in required_db:
+            if self.db_info[key] != required_db[key]:
+                print("Incompatible DB", file=sys.stderr)
+                print("Want {sysname} v{vmajor}.{vminor}.{vpatch}".format(**required_db), file=sys.stderr)
+                print("Got {sysname} v{vmajor}.{vminor}.{vpatch}".format(**self.db_info), file=sys.stderr)
+                sys.exit(1)
         exec("self.process_{}()".format(self.args.action))
 
     def process_query(self):
