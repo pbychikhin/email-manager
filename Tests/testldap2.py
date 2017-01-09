@@ -8,7 +8,6 @@ import sys
 import traceback
 import random
 import argparse
-import ldap3.core.exceptions
 
 cmdlnparser = argparse.ArgumentParser(description="Get users from AD")
 cmdlnparser.add_argument("-c", help="AD controller(s)", action="append", required=True)
@@ -64,13 +63,19 @@ domain_functionality = {"0": "WIN2000",
                         "7": "WIN2016"}
 current_domain_functionality = "UNKNOWN"
 
-servers = [ldap3.Server(server, get_info=ldap3.ALL) for server in cmdlargs.c]
+servers = [ldap3.Server(host=server, get_info=ldap3.ALL) for server in cmdlargs.c]
 random.shuffle(servers)
 server_pool = ldap3.ServerPool(servers, pool_strategy=ldap3.FIRST, active=True)
 
+lconn = None
 try:
     lconn = ldap3.Connection(server=server_pool, user=cmdlargs.u, password=cmdlargs.p,
                              return_empty_attributes=True, raise_exceptions=True, auto_bind=ldap3.AUTO_BIND_NO_TLS)
 except ldap3.core.exceptions.LDAPException:
     handle_ldap_exception(sys.exc_info())
-print(lconn.server.info)
+rootDSE_keys = ["defaultNamingContext", "configurationNamingContext", "domainFunctionality",
+                      "serverName", "dnsHostName"]
+rootDSE_values = [x[0] if isinstance(x, list) else x for x in map(lambda var: lconn.server.info.other[var], rootDSE_keys)]
+rootDSE = dict(zip(rootDSE_keys, rootDSE_values))
+print("Connected to the LDAP at {}".format(rootDSE["dnsHostName"]))
+print("Current domain functionality is {}".format(rootDSE["domainFunctionality"]))
