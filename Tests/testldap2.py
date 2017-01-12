@@ -4,10 +4,13 @@
 
 import ldap3
 import ldap3.core.exceptions
+from ldap3.utils.ciDict import CaseInsensitiveDict
 import sys
 import traceback
 import random
 import argparse
+from dateutil import tz
+from tabulate import tabulate
 
 cmdlnparser = argparse.ArgumentParser(description="Get users from AD")
 cmdlnparser.add_argument("-c", help="AD controller(s)", action="append", required=True)
@@ -63,7 +66,7 @@ domain_functionality = {"0": "WIN2000",
                         "7": "WIN2016"}
 current_domain_functionality = "UNKNOWN"
 
-servers = [ldap3.Server(host=server, get_info=ldap3.ALL) for server in cmdlargs.c]
+servers = [ldap3.Server(host=server, get_info=ldap3.ALL, allowed_referral_hosts=[("*", True)]) for server in cmdlargs.c]
 random.shuffle(servers)
 server_pool = ldap3.ServerPool(servers, pool_strategy=ldap3.FIRST, active=True)
 
@@ -76,6 +79,37 @@ except ldap3.core.exceptions.LDAPException:
 rootDSE_keys = ["defaultNamingContext", "configurationNamingContext", "domainFunctionality",
                       "serverName", "dnsHostName"]
 rootDSE_values = [x[0] if isinstance(x, list) else x for x in map(lambda var: lconn.server.info.other[var], rootDSE_keys)]
-rootDSE = dict(zip(rootDSE_keys, rootDSE_values))
+rootDSE = CaseInsensitiveDict(zip(rootDSE_keys, rootDSE_values))
 print("Connected to the LDAP at {}".format(rootDSE["dnsHostName"]))
-print("Current domain functionality is {}".format(rootDSE["domainFunctionality"]))
+print("Current domain functionality is {}\n".format(domain_functionality[rootDSE["domainFunctionality"]]))
+
+account_attrs = ["name", "userPrincipalName", "displayName", "objectGUID", "userAccountControl", "usnChanged",
+                 "whenChanged", "isDeleted"]
+control_showdeleted = ("1.2.840.113556.1.4.417", False, None)
+try:
+    lconn.search(search_base=rootDSE["defaultNamingContext"], search_scope=ldap3.SUBTREE,
+                 search_filter="(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=512))",
+                 attributes=account_attrs, controls=[control_showdeleted])
+except ldap3.core.exceptions.LDAPException:
+    handle_ldap_exception(sys.exc_info())
+attr_len = max(map(len, account_attrs))
+attr_table = []
+for lentry in lconn.response:
+    if lentry["type"] == "searchResRef":
+        continue
+    print("DN: {}".format(lentry["dn"]))
+    attr_row = []
+    for attrname in account_attrs:
+        attrvalue = lentry["attributes"][attrname]
+        if isinstance(attrvalue, list) and len(attrvalue) == 0:
+            attr_row.append("N/A")
+            continue
+        if attrname == "whenChanged":
+            valtoprint = attrvalue.astimezone(tz.tzlocal()).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            valtoprint = attrvalue
+        attr_row.append(valtoprint)
+        print((2 * " " + "{:>" + str(attr_len) + "}: {}").format(attrname, valtoprint))
+    attr_table.append(attr_row)
+    print("\n")
+print(tabulate(attr_table, headers=account_attrs))
