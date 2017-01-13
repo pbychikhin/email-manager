@@ -3,7 +3,7 @@
 # Testing ldap interaction using ldap3 module (https://pypi.python.org/pypi/ldap3)
 
 import ldap3
-import ldap3.core.exceptions
+from ldap3.core.exceptions import LDAPException
 from ldap3.utils.ciDict import CaseInsensitiveDict
 import sys
 import traceback
@@ -74,7 +74,7 @@ lconn = None
 try:
     lconn = ldap3.Connection(server=server_pool, user=cmdlargs.u, password=cmdlargs.p,
                              return_empty_attributes=True, raise_exceptions=True, auto_bind=ldap3.AUTO_BIND_NO_TLS)
-except ldap3.core.exceptions.LDAPException:
+except LDAPException:
     handle_ldap_exception(sys.exc_info())
 rootDSE_keys = ["defaultNamingContext", "configurationNamingContext", "domainFunctionality",
                       "serverName", "dnsHostName"]
@@ -90,7 +90,7 @@ try:
     lconn.search(search_base=rootDSE["defaultNamingContext"], search_scope=ldap3.SUBTREE,
                  search_filter="(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=512))",
                  attributes=account_attrs, controls=[control_showdeleted])
-except ldap3.core.exceptions.LDAPException:
+except LDAPException:
     handle_ldap_exception(sys.exc_info())
 attr_len = max(map(len, account_attrs))
 attr_table = []
