@@ -94,6 +94,7 @@ class BasePlugin:
     def __init__(self):
         self.handle_pg_exception = PgGenericExceptionHandler(do_exit=True)
         self.handle_cfg_exception = CfgGenericExceptionHandler(do_exit=True)
+        self.handle_ldap_exception = LdapGenericExceptionHandler(do_exit=True)
         self.process_vars = {}
         self.process_vars["query_header_translations"] = {}
         self.process_vars["action_attrs_translations"] = {}
