@@ -66,7 +66,7 @@ domain_functionality = {"0": "WIN2000",
                         "7": "WIN2016"}
 current_domain_functionality = "UNKNOWN"
 
-servers = [ldap3.Server(host=server, get_info=ldap3.ALL, allowed_referral_hosts=[("*", True)]) for server in cmdlargs.c]
+servers = [ldap3.Server(host=server, get_info=ldap3.ALL) for server in cmdlargs.c]
 random.shuffle(servers)
 server_pool = ldap3.ServerPool(servers, pool_strategy=ldap3.FIRST, active=True)
 
