@@ -1,0 +1,4 @@
+
+[Core]
+Name = adsync
+Module = Adsync
