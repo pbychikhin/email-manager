@@ -17,8 +17,16 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
         IPlugin.__init__(self)
         libemailmgr.BasePlugin.__init__(self)
         self.cfg, self.actions = None, None
-        self.opchain = [self.op_connect]
+        self.opchain = [self.op_adconnect, self.op_adidentify]
         self.lconn = None
+        self.rootDSE = None
+        self.domain_attrs = CaseInsensitiveDict()
+
+    @staticmethod
+    def ldapentry_mutli2singleval(entry):
+        for key, val in entry.items():
+            if isinstance(val, list):
+                entry[key] = val[0]
 
     def configure(self, whoami, cfg, args, db):
         """
@@ -41,7 +49,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             opseq += 1
             oper(opseq, len(self.opchain))
 
-    def op_connect(self, opseq, optotal):
+    def op_adconnect(self, opseq, optotal):
         print("Conecting to the AD (operation {} of {})".format(opseq, optotal))
         try:
             servers = [ldap3.Server(host=server, get_info=ldap3.ALL)
@@ -50,10 +58,41 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             server_pool = ldap3.ServerPool(servers, pool_strategy=ldap3.FIRST, active=1)
             user = self.cfg.get("adsync", "user")
             password = self.cfg.get("adsync", "password")
-            self.lconn = ldap3.Connection(server=server_pool, user=user, password=password,
-                                     return_empty_attributes=True, raise_exceptions=True,
+            self.lconn = ldap3.Connection(server=server_pool, user=user, password=password, raise_exceptions=True,
                                      auto_bind=ldap3.AUTO_BIND_NO_TLS)
         except configparser.Error:
             self.handle_cfg_exception(sys.exc_info())
         except LDAPException:
             self.handle_ldap_exception(sys.exc_info())
+        rootDSE_keys = ["defaultNamingContext", "configurationNamingContext", "domainFunctionality",
+                        "serverName", "dnsHostName"]
+        rootDSE_values = [x[0] if isinstance(x, list) else x for x in
+                          map(lambda var: self.lconn.server.info.other[var], rootDSE_keys)]
+        self.rootDSE = CaseInsensitiveDict(zip(rootDSE_keys, rootDSE_values))
+
+    def op_adidentify(self, opseq, optotal):
+        print("Identifying the domain (operation {} of {})".format(opseq, optotal))
+        dom_id = {}
+        try:
+            self.lconn.search(search_base="CN=Partitions," + self.rootDSE["configurationNamingContext"],
+                              search_scope=ldap3.LEVEL,
+                              search_filter="(&(objectClass=crossRef)(nCName={}))".format(self.rootDSE["defaultNamingContext"]),
+                              attributes=["dnsRoot", "nETBIOSName"])
+        except LDAPException:
+            self.handle_ldap_exception(sys.exc_info())
+        lentry = self.lconn.response[0]["attributes"]
+        self.ldapentry_mutli2singleval(lentry)
+        self.domain_attrs.update(lentry)
+        try:
+            self.lconn.search(search_base=self.rootDSE["defaultNamingContext"],
+                              search_scope=ldap3.BASE,
+                              search_filter="(objectClass=*)",
+                              attributes=["objectGUID", "whenChanged"])
+        except LDAPException:
+            self.handle_ldap_exception(sys.exc_info())
+        lentry = self.lconn.response[0]["attributes"]
+        lentry_raw = self.lconn.response[0]["raw_attributes"]
+        for entry in [lentry, lentry_raw]:
+            self.ldapentry_mutli2singleval(entry)
+        self.domain_attrs.update(lentry)
+        self.domain_attrs["objectGUID_raw"] = lentry_raw["objectGUID"]
