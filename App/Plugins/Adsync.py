@@ -5,6 +5,7 @@ import argparse
 import configparser
 import os.path
 import random
+import psycopg2
 import ldap3
 from ldap3.core.exceptions import LDAPException
 from ldap3.utils.ciDict import CaseInsensitiveDict
@@ -17,7 +18,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
         IPlugin.__init__(self)
         libemailmgr.BasePlugin.__init__(self)
         self.cfg, self.actions = None, None
-        self.opchain = [self.op_adconnect, self.op_adidentify]
+        self.opchain = [self.op_adconnect, self.op_adidentify, self.op_applock]
         self.lconn = None
         self.rootDSE = None
         self.domain_attrs = CaseInsensitiveDict()
@@ -27,6 +28,14 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
         for key, val in entry.items():
             if isinstance(val, list):
                 entry[key] = val[0]
+
+    @staticmethod
+    def stepmsg(msg, opseq, optotal):
+        print("{} (operation {} of {})".format(msg, opseq, optotal))
+
+    @staticmethod
+    def substepmsg(msg):
+        print("  + {}".format(msg))
 
     def configure(self, whoami, cfg, args, db):
         """
@@ -50,7 +59,8 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             oper(opseq, len(self.opchain))
 
     def op_adconnect(self, opseq, optotal):
-        print("Conecting to the AD (operation {} of {})".format(opseq, optotal))
+        self.stepmsg("Conecting to the AD", opseq, optotal)
+        self.substepmsg("connecting to the first available LDAP server")
         try:
             servers = [ldap3.Server(host=server, get_info=ldap3.ALL)
                        for server in self.cfg.get("adsync", "host").split()]
@@ -64,6 +74,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             self.handle_cfg_exception(sys.exc_info())
         except LDAPException:
             self.handle_ldap_exception(sys.exc_info())
+        self.substepmsg("processing root DSE")
         rootDSE_keys = ["defaultNamingContext", "configurationNamingContext", "domainFunctionality",
                         "serverName", "dnsHostName"]
         rootDSE_values = [x[0] if isinstance(x, list) else x for x in
@@ -71,8 +82,8 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
         self.rootDSE = CaseInsensitiveDict(zip(rootDSE_keys, rootDSE_values))
 
     def op_adidentify(self, opseq, optotal):
-        print("Identifying the domain (operation {} of {})".format(opseq, optotal))
-        dom_id = {}
+        self.stepmsg("Identifying the domain", opseq, optotal)
+        self.substepmsg("retrieving name")
         try:
             self.lconn.search(search_base="CN=Partitions," + self.rootDSE["configurationNamingContext"],
                               search_scope=ldap3.LEVEL,
@@ -83,6 +94,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
         lentry = self.lconn.response[0]["attributes"]
         self.ldapentry_mutli2singleval(lentry)
         self.domain_attrs.update(lentry)
+        self.substepmsg("retrieving additional attributes")
         try:
             self.lconn.search(search_base=self.rootDSE["defaultNamingContext"],
                               search_scope=ldap3.BASE,
@@ -96,3 +108,10 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             self.ldapentry_mutli2singleval(entry)
         self.domain_attrs.update(lentry)
         self.domain_attrs["objectGUID_raw"] = lentry_raw["objectGUID"]
+
+    def op_applock(self, opseq, optotal):
+        self.stepmsg("Obtaining an application lock", opseq, optotal)
+        try:
+            self.dbc.execute("SELECT pg_advisory_lock(%s)", [libemailmgr.SQL_ADSYNC_LOCK])
+        except psycopg2.Error:
+            self.handle_pg_exception(sys.exc_info())
