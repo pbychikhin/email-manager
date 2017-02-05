@@ -113,5 +113,9 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
         self.stepmsg("Obtaining an application lock", opseq, optotal)
         try:
             self.dbc.execute("SELECT pg_advisory_lock(%s)", [libemailmgr.SQL_ADSYNC_LOCK])
+            self.db.commit()
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
+
+    def op_syncdomain(self, opseq, optotal):
+        self.stepmsg("Synchronizing the domain", opseq, optotal)
