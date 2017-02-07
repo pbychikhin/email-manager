@@ -18,10 +18,12 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
         IPlugin.__init__(self)
         libemailmgr.BasePlugin.__init__(self)
         self.cfg, self.actions = None, None
-        self.opchain = [self.op_adconnect, self.op_adidentify, self.op_applock]
+        self.opchain = [self.op_adconnect, self.op_adidentify, self.op_applock, self.op_syncdomain]
+        self.opstatus_stop = False  # if an operation sets this to True, the whole process must stop
         self.lconn = None
         self.rootDSE = None
-        self.domain_attrs = CaseInsensitiveDict()
+        self.domain_attrs = CaseInsensitiveDict()  # Domain attributes from the AD
+        self.db_domain_entry = {}  # Domain data from the DB
 
     @staticmethod
     def ldapentry_mutli2singleval(entry):
@@ -55,8 +57,11 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
     def process_sync(self):
         opseq = 0
         for oper in self.opchain:
-            opseq += 1
-            oper(opseq, len(self.opchain))
+            if self.opstatus_stop:
+                self.substepmsg("the operation has requested to stop. stopping")
+            else:
+                opseq += 1
+                oper(opseq, len(self.opchain))
 
     def op_adconnect(self, opseq, optotal):
         self.stepmsg("Conecting to the AD", opseq, optotal)
@@ -119,3 +124,43 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
 
     def op_syncdomain(self, opseq, optotal):
         self.stepmsg("Synchronizing the domain", opseq, optotal)
+        try:
+            self.substepmsg("checking by GUID, {{{}}}".format(self.domain_attrs["objectGUID"]))
+            self.dbc.execute("SELECT id, name, ad_guid, ad_sync_enabled FROM domain WHERE ad_guid = %s",
+                             [self.domain_attrs["objectGUID_raw"]])
+            if self.dbc.rowcount < 1:
+                self.substepmsg("checking by name, {}".format(self.domain_attrs["dnsRoot"]))
+                self.dbc.execute("SELECT id, name, ad_guid, ad_sync_enabled FROM domain WHERE LOWER(name) = LOWER(%s)",
+                                 [self.domain_attrs["dnsRoot"]])
+            if self.dbc.rowcount < 1:
+                self.substepmsg("the domain seems to be new - creating")
+                self.dbc.execute("INSERT INTO domain(name, spooldir, ad_guid, created, modified)"
+                                 "VALUES(%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                                 [self.domain_attrs["dnsRoot"], self.domain_attrs["objectGUID"],
+                                 self.domain_attrs["objectGUID_raw"]])
+                self.dbc.execute("SELECT id, name, ad_guid, ad_sync_enabled FROM domain WHERE ad_guid = %s",
+                                 [self.domain_attrs["objectGUID_raw"]])
+            self.db_domain_entry = dict(zip([item[0] for item in self.dbc.description], self.dbc.fetchone()))
+            if self.db_domain_entry["ad_sync_enabled"]:
+                if self.db_domain_entry["ad_guid"] is None:
+                    self.substepmsg("binding existing domain {} to the AD (updating GUID)".format(
+                        self.domain_attrs["dnsRoot"]))
+                    self.dbc.execute("UPDATE domain SET ad_guid = %s, modified = CURRENT_TIMESTAMP"
+                                     "WHERE id = %s",
+                                     [self.domain_attrs["objectGUID_raw"], self.db_domain_entry["id"]])
+                elif self.db_domain_entry["ad_guid"].tobytes() != self.domain_attrs["objectGUID_raw"]:
+                    self.substepmsg("existing domain {} is already bound to a different AD - stopping here".format(
+                        self.db_domain_entry["name"]
+                    ))
+                    self.opstatus_stop = True
+                elif self.db_domain_entry["name"].lower() != self.domain_attrs["dnsRoot"].lower():
+                    self.substepmsg("the domain seems to be renamed - updating name to {}".format(self.domain_attrs["dnsRoot"]))
+                    self.dbc.execute("UPDATE domain SET name = %s, modified = CURRENT_TIMESTAMP WHERE id = %s",
+                                     [self.domain_attrs["dnsRoot"], self.db_domain_entry["id"]])
+            else:
+                self.substepmsg("AD synchronization of the domain {} is not allowed - stopping here".format(
+                    self.db_domain_entry["name"]))
+                self.opstatus_stop = True
+            self.db.commit()
+        except psycopg2.Error:
+            self.handle_pg_exception(sys.exc_info())

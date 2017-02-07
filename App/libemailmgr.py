@@ -221,7 +221,7 @@ class PgGenericExceptionHandler(EmailmgrBaseExceptionHandler):
         # TODO: simplify this handler by analogy with CfgGenericExceptionHandler (just print the exception object)
         ex_obj, ex_traceback = exception_info[1:3]
         if ex_obj.diag.message_primary:
-            print(ex_obj.diag.message_primary, file=sys.stderr)
+            print("PGSQL error: {}".format(ex_obj.diag.message_primary), file=sys.stderr)
             if ex_obj.diag.message_hint:
                 print("Hint: ", ex_obj.diag.message_hint, file=sys.stderr)
         else:
