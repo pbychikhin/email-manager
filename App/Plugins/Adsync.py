@@ -59,6 +59,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
         for oper in self.opchain:
             if self.opstatus_stop:
                 self.substepmsg("the operation has requested to stop. stopping")
+                break
             else:
                 opseq += 1
                 oper(opseq, len(self.opchain))
