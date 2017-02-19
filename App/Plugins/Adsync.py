@@ -18,12 +18,14 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
         IPlugin.__init__(self)
         libemailmgr.BasePlugin.__init__(self)
         self.cfg, self.actions = None, None
-        self.opchain = [self.op_adconnect, self.op_adidentify, self.op_applock, self.op_syncdomain]
+        self.opchain = [self.op_adconnect, self.op_adidentify, self.op_applock, self.op_syncdomain,
+                        self.op_inittracking]
         self.opstatus_stop = False  # if an operation sets this to True, the whole process must stop
         self.lconn = None
         self.rootDSE = None
         self.domain_attrs = CaseInsensitiveDict()  # Domain attributes from the AD
         self.db_domain_entry = {}  # Domain data from the DB
+        self.db_dit_entry = {}  # Domain DIT (Directory Information Tree) data from the DB
 
     @staticmethod
     def ldapentry_mutli2singleval(entry):
@@ -163,5 +165,33 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                     self.db_domain_entry["name"]))
                 self.opstatus_stop = True
             self.db.commit()
+        except psycopg2.Error:
+            self.handle_pg_exception(sys.exc_info())
+
+    def op_inittracking(self, opseq, optotal):
+        self.stepmsg("Initializing tracking", opseq, optotal)
+        try:
+            self.substepmsg("retrieving DIT ID")
+            self.lconn.search(search_base="CN=NTDS Settings," + self.rootDSE["serverName"],
+                              search_scope=ldap3.BASE,
+                              search_filter="(objectClass=*)",
+                              attributes=["invocationId"])
+        except LDAPException:
+            self.handle_ldap_exception(sys.exc_info())
+        lentry = self.lconn.response[0]["attributes"] # invocationId is a single octet-string value. so here and below we don't need any additional checks and conversions
+        DITinvocationID = lentry["invocationId"]
+        try:
+            self.substepmsg("checking database for the tracking record")
+            self.dbc.execute("SELECT id, domain_id, dit_invocation_id, dit_usn FROM usn_tracking WHERE domain_id = %s AND dit_invocation_id = %s",
+                             [self.db_domain_entry["id"], DITinvocationID])
+            if self.dbc.rowcount < 1:
+                self.substepmsg("no tracking record for the retrieved DIT ID - creating")
+                self.dbc.execute("INSERT INTO usn_tracking(domain_id, dit_invocation_id) VALUES(%s, %s)",
+                                 [self.db_domain_entry["id"], DITinvocationID])
+                self.dbc.execute("SELECT id, domain_id, dit_invocation_id, dit_usn FROM usn_tracking WHERE domain_id = %s AND dit_invocation_id = %s",
+                    [self.db_domain_entry["id"], DITinvocationID])
+            self.db.commit()
+            self.substepmsg("caching tracking record")
+            self.db_dit_entry = dict(zip([item[0] for item in self.dbc.description], self.dbc.fetchone()))
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
