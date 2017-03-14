@@ -14,18 +14,30 @@ from yapsy.IPlugin import IPlugin
 
 class adsync(IPlugin, libemailmgr.BasePlugin):
 
+    account_control_flags = {
+        "ADS_UF_ACCOUNTDISABLE": 0x00000002,
+        "ADS_UF_NORMAL_ACCOUNT": 0x00000200
+    }
+
     def __init__(self):
         IPlugin.__init__(self)
         libemailmgr.BasePlugin.__init__(self)
         self.cfg, self.actions = None, None
-        self.opchain = [self.op_adconnect, self.op_adidentify, self.op_applock, self.op_syncdomain,
-                        self.op_inittracking]
+        self.opchain = [
+            self.op_adconnect,
+            self.op_adidentify,
+            self.op_applock,
+            self.op_syncdomain,
+            self.op_inittracking,
+            self.op_syncrequired
+        ]
         self.opstatus_stop = False  # if an operation sets this to True, the whole process must stop
         self.lconn = None
         self.rootDSE = None
         self.domain_attrs = CaseInsensitiveDict()  # Domain attributes from the AD
         self.db_domain_entry = {}  # Domain data from the DB
         self.db_dit_entry = {}  # Domain DIT (Directory Information Tree) data from the DB
+        self.max_oper_usn = 0  # Max USN from all operations is stored in this var and saved to the DB at the end of synchronization
 
     @staticmethod
     def ldapentry_mutli2singleval(entry):
@@ -178,7 +190,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                               attributes=["invocationId"])
         except LDAPException:
             self.handle_ldap_exception(sys.exc_info())
-        lentry = self.lconn.response[0]["attributes"] # invocationId is a single octet-string value. so here and below we don't need any additional checks and conversions
+        lentry = self.lconn.response[0]["attributes"]  # invocationId is a single octet-string value. so here and below we don't need any additional checks and conversions
         DITinvocationID = lentry["invocationId"]
         try:
             self.substepmsg("checking database for the tracking record")
@@ -193,5 +205,15 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             self.db.commit()
             self.substepmsg("caching tracking record")
             self.db_dit_entry = dict(zip([item[0] for item in self.dbc.description], self.dbc.fetchone()))
+        except psycopg2.Error:
+            self.handle_pg_exception(sys.exc_info())
+
+    def op_syncrequired(self, opseq, optotal):
+        self.stepmsg("Synchronizing accounts with the \"required\" flag set", opseq, optotal)
+        try:
+            self.dbc.execute("SELECT id, name FROM account WHERE domain_id = %s AND ad_sync_required = TRUE",
+                             [self.db_domain_entry["id"]])
+            for db_entry in self.dbc:
+                self.substepmsg(str(db_entry) + ": to be continued")
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
