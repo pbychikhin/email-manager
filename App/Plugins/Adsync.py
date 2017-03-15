@@ -214,6 +214,13 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             self.dbc.execute("SELECT id, name FROM account WHERE domain_id = %s AND ad_sync_required = TRUE",
                              [self.db_domain_entry["id"]])
             for db_entry in self.dbc:
-                self.substepmsg(str(db_entry) + ": to be continued")
+                db_account = dict(zip([item[0] for item in self.dbc.description], db_entry))
+                try:
+                    self.lconn.search(search_base=self.rootDSE["defaultNamingContext"],
+                                      search_filter="(objectClass=*)",
+                                      attributes=["objectGUID", "whenChanged"])
+                except LDAPException:
+                    self.handle_ldap_exception(sys.exc_info())
+                print(db_account)
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
