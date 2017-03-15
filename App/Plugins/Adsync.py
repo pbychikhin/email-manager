@@ -46,6 +46,18 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                 entry[key] = val[0]
 
     @staticmethod
+    def ldapresponse_removerefs(lresponse):
+        ref_idxs = []
+        counter = 0
+        for lentry in lresponse:
+            if lentry["type"] == "searchResRef":
+                ref_idxs.append(counter)
+            counter += 1
+        ref_idxs.reverse()
+        for idx in ref_idxs:
+            del lresponse[idx:idx+1]
+
+    @staticmethod
     def stepmsg(msg, opseq, optotal):
         print("{} (operation {} of {})".format(msg, opseq, optotal))
 
@@ -217,10 +229,16 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                 db_account = dict(zip([item[0] for item in self.dbc.description], db_entry))
                 try:
                     self.lconn.search(search_base=self.rootDSE["defaultNamingContext"],
-                                      search_filter="(objectClass=*)",
-                                      attributes=["objectGUID", "whenChanged"])
+                                      search_filter="(&(objectClass=user)(userPrincipalName={})"
+                                                    "(userAccountControl:1.2.840.113556.1.4.803:=512)"
+                                                    "(!(servicePrincipalName=*)))".format("@".join([db_account["name"], self.domain_attrs["dnsRoot"]])),
+                                     attributes=["userPrincipalName", "displayName", "objectGUID", "userAccountControl", "whenChanged"])
                 except LDAPException:
                     self.handle_ldap_exception(sys.exc_info())
-                print(db_account)
+                self.ldapresponse_removerefs(self.lconn.response)
+                try:
+                    print(self.lconn.response[0]["attributes"])
+                except IndexError:
+                    self.substepmsg("deleting {}: not found in the AD".format("@".join([db_account["name"], self.domain_attrs["dnsRoot"]])))
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
