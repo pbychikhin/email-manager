@@ -14,6 +14,9 @@ from yapsy.IPlugin import IPlugin
 
 class adsync(IPlugin, libemailmgr.BasePlugin):
 
+    class OpChainStopException(Exception):
+        pass
+
     account_control_flags = {
         "ADS_UF_ACCOUNTDISABLE": 0x00000002,
         "ADS_UF_NORMAL_ACCOUNT": 0x00000200
@@ -31,7 +34,6 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             self.op_inittracking,
             self.op_syncrequired
         ]
-        self.opstatus_stop = False  # if an operation sets this to True, the whole process must stop
         self.lconn = None
         self.rootDSE = None
         self.domain_attrs = CaseInsensitiveDict()  # Domain attributes from the AD
@@ -83,12 +85,12 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
     def process_sync(self):
         opseq = 0
         for oper in self.opchain:
-            if self.opstatus_stop:
-                self.substepmsg("the operation has requested to stop. stopping")
-                break
-            else:
+            try:
                 opseq += 1
                 oper(opseq, len(self.opchain))
+            except type(self).OpChainStopException:
+                self.substepmsg("the operation has requested to stop. stopping")
+                break
 
     def op_adconnect(self, opseq, optotal):
         self.stepmsg("Conecting to the AD", opseq, optotal)
@@ -179,7 +181,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                     self.substepmsg("existing domain {} is already bound to a different AD - stopping here".format(
                         self.db_domain_entry["name"]
                     ))
-                    self.opstatus_stop = True
+                    raise type(self).OpChainStopException
                 elif self.db_domain_entry["name"].lower() != self.domain_attrs["dnsRoot"].lower():
                     self.substepmsg("the domain seems to be renamed - updating name to {}".format(self.domain_attrs["dnsRoot"]))
                     self.dbc.execute("UPDATE domain SET name = %s, modified = CURRENT_TIMESTAMP WHERE id = %s",
@@ -187,7 +189,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             else:
                 self.substepmsg("AD synchronization of the domain {} is not allowed - stopping here".format(
                     self.db_domain_entry["name"]))
-                self.opstatus_stop = True
+                raise type(self).OpChainStopException
             self.db.commit()
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
