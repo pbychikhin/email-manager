@@ -45,7 +45,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
     def ldapentry_mutli2singleval(entry):
         for key, val in entry.items():
             if isinstance(val, list):
-                entry[key] = val[0]
+                entry[key] = None if len(val) < 1 else val[0]
 
     @staticmethod
     def ldapresponse_removerefs(lresponse):
@@ -103,7 +103,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             user = self.cfg.get("adsync", "user")
             password = self.cfg.get("adsync", "password")
             self.lconn = ldap3.Connection(server=server_pool, user=user, password=password, raise_exceptions=True,
-                                     auto_bind=ldap3.AUTO_BIND_NO_TLS)
+                                     auto_bind=ldap3.AUTO_BIND_NO_TLS, return_empty_attributes=True)
         except configparser.Error:
             self.handle_cfg_exception(sys.exc_info())
         except LDAPException:
@@ -229,18 +229,45 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                              [self.db_domain_entry["id"]])
             for db_entry in self.dbc:
                 db_account = dict(zip([item[0] for item in self.dbc.description], db_entry))
+                curr1 = self.db.cursor()
                 try:
                     self.lconn.search(search_base=self.rootDSE["defaultNamingContext"],
                                       search_filter="(&(objectClass=user)(userPrincipalName={})"
                                                     "(userAccountControl:1.2.840.113556.1.4.803:=512)"
                                                     "(!(servicePrincipalName=*)))".format("@".join([db_account["name"], self.domain_attrs["dnsRoot"]])),
-                                     attributes=["userPrincipalName", "displayName", "objectGUID", "userAccountControl", "whenChanged"])
+                                      attributes=["userPrincipalName", "displayName", "objectGUID", "userAccountControl", "whenChanged"])
                 except LDAPException:
                     self.handle_ldap_exception(sys.exc_info())
                 self.ldapresponse_removerefs(self.lconn.response)
                 try:
-                    print(self.lconn.response[0]["attributes"])
+                    for entry in [self.lconn.response[0]["raw_attributes"], self.lconn.response[0]["attributes"]]:
+                        self.ldapentry_mutli2singleval(entry)
                 except IndexError:
-                    self.substepmsg("deleting {}: not found in the AD".format("@".join([db_account["name"], self.domain_attrs["dnsRoot"]])))
+                    self.substepmsg("deleting {} - not found in the AD".format(db_account["name"]))
+                    curr1.execute("DELETE FROM account WHERE id = %s", [db_account["id"]])
+                else:
+                    curr1.execute("SELECT id, name FROM account WHERE ad_guid = %s",
+                                  [self.lconn.response[0]["raw_attributes"]["objectGUID"]])
+                    try:
+                        db_account_check = dict(zip([item[0] for item in curr1.description], curr1.fetchone()))
+                    except TypeError:  # curr1.fetchone() fetched None
+                        db_account_check = None
+                    if db_account_check and db_account["id"] != db_account_check["id"]:
+                        self.substepmsg("deleting {} - GUID from AD conflicts with {}".format(db_account["name"], db_account_check["name"]))
+                        curr1.execute("DELETE FROM account WHERE id = %s", [db_account["id"]])
+                    else:
+                        self.substepmsg("updating {}".format(db_account["name"]))
+                        curr1.execute("UPDATE account SET name = %s, fullname = %s, modified = CURRENT_TIMESTAMP,"
+                                      "active = %s, ad_guid = %s, ad_sync_enabled = TRUE, ad_sync_required = FALSE,"
+                                      "ad_time_changed = %s WHERE id = %s", [
+                                          self.lconn.response[0]["attributes"]["userPrincipalName"].split("@")[0],
+                                          self.lconn.response[0]["attributes"]["displayName"],
+                                          False if self.lconn.response[0]["attributes"]["userAccountControl"] &
+                                                   type(self).account_control_flags["ADS_UF_ACCOUNTDISABLE"] else True,
+                                          self.lconn.response[0]["raw_attributes"]["objectGUID"],
+                                          self.lconn.response[0]["attributes"]["whenChanged"],
+                                          db_account["id"]
+                                      ])
+            self.db.commit()
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())

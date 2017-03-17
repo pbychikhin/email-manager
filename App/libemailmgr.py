@@ -223,7 +223,7 @@ class PgGenericExceptionHandler(EmailmgrBaseExceptionHandler):
         if ex_obj.diag.message_primary:
             print("PGSQL error: {}".format(ex_obj.diag.message_primary), file=sys.stderr)
             if ex_obj.diag.message_hint:
-                print("Hint: ", ex_obj.diag.message_hint, file=sys.stderr)
+                print("Hint: {}".format(ex_obj.diag.message_hint), file=sys.stderr)
         else:
             print(ex_obj.args[0], file=sys.stderr)
         if self.print_traceback:

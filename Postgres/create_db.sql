@@ -43,7 +43,7 @@ CREATE TABLE account (
 	ad_guid BYTEA DEFAULT NULL UNIQUE,
 	ad_sync_enabled BOOLEAN NOT NULL DEFAULT TRUE,
 	ad_sync_required BOOLEAN NOT NULL DEFAULT FALSE,
-	ad_time_changed BYTEA DEFAULT NULL,
+	ad_time_changed TIMESTAMP(0) WITH TIME ZONE DEFAULT NULL,
 	CONSTRAINT fk_domain_id FOREIGN KEY (domain_id) REFERENCES domain(id)
 	);
 
