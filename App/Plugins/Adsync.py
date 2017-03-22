@@ -239,19 +239,18 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                 except LDAPException:
                     self.handle_ldap_exception(sys.exc_info())
                 self.ldapresponse_removerefs(self.lconn.response)
-                try:
-                    for entry in [self.lconn.response[0]["raw_attributes"], self.lconn.response[0]["attributes"]]:
-                        self.ldapentry_mutli2singleval(entry)
-                except IndexError:
+                if len(self.lconn.response) < 1:
                     self.substepmsg("deleting {} - not found in the AD".format(db_account["name"]))
                     curr1.execute("DELETE FROM account WHERE id = %s", [db_account["id"]])
                 else:
+                    for entry in [self.lconn.response[0]["raw_attributes"], self.lconn.response[0]["attributes"]]:
+                        self.ldapentry_mutli2singleval(entry)
                     curr1.execute("SELECT id, name FROM account WHERE ad_guid = %s",
                                   [self.lconn.response[0]["raw_attributes"]["objectGUID"]])
-                    try:
-                        db_account_check = dict(zip([item[0] for item in curr1.description], curr1.fetchone()))
-                    except TypeError:  # curr1.fetchone() fetched None
-                        db_account_check = None
+                    db_account_check = None
+                    for db_entry1 in curr1:
+                        db_account_check = dict(zip([item[0] for item in curr1.description], db_entry1))
+                        break
                     if db_account_check and db_account["id"] != db_account_check["id"]:
                         self.substepmsg("deleting {} - GUID from AD conflicts with {}".format(db_account["name"], db_account_check["name"]))
                         curr1.execute("DELETE FROM account WHERE id = %s", [db_account["id"]])
