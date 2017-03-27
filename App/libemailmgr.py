@@ -170,10 +170,10 @@ class BasePlugin:
         PrintPrettyAttrs(self.args, self.process_vars["action_attrs"],
                          GetPrettyAttrs(self.process_vars["action_attrs"], self.process_vars["action_attrs_translations"]))
         print()
-        print("Press \"y\" to continue", end=' ')  # TODO: Special cmd-line option "-y" should also be implemented
+        print("Press \"y\" to continue", end=' ')
         sys.stdout.flush()
-        keystroke = getch()
-        if keystroke == "y" or keystroke == "Y":
+        keystroke = "y" if hasattr(self.args, "y") and self.args.y is True else getch()
+        if keystroke in ["y", "Y"]:
             print("[Ok]")
             print(self.process_vars["action_msg_2"], end=' ')
             sys.stdout.flush()

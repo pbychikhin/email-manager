@@ -44,6 +44,7 @@ class alias(IPlugin, libemailmgr.BasePlugin):
         cmdgroup.add_argument("-nopublic", help="Unpublish the alias name", dest="public", action='store_false',
                               default=None)
         cmd.add_argument("-r", help="Record-style view", action="store_true", default=False)
+        cmd.add_argument("-y", help="Assume \"Yes\" if confirmation is requested", action="store_true", default=False)
         self.args = cmd.parse_args(args)
         self.db = db
         self.configured = True

@@ -41,6 +41,7 @@ class domain(IPlugin, libemailmgr.BasePlugin):
         cmdgroup = cmd.add_mutually_exclusive_group()
         cmdgroup.add_argument("-adsync", help="Sync the domain with AD", dest="adsync", action='store_true')
         cmdgroup.add_argument("-noadsync", help="Stop syncing the domain with AD", dest="adsync", action='store_false')
+        cmd.add_argument("-y", help="Assume \"Yes\" if confirmation is requested", action="store_true", default=False)
         self.args = cmd.parse_args(args)
         self.db = db
         self.configured = True

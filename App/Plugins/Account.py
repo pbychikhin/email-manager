@@ -54,6 +54,7 @@ class account(IPlugin, libemailmgr.BasePlugin):
         cmd.add_argument("-r", help="Record-style view", action="store_true", default=False)
         cmd.add_argument("-g", help="Generate random password", action="store_true", default=False)
         cmd.add_argument("-s", help="Show password in query results", action="store_true", default=False)
+        cmd.add_argument("-y", help="Assume \"Yes\" if confirmation is requested", action="store_true", default=False)
         self.args = cmd.parse_args(args)
         self.db = db
         self.configured = True
