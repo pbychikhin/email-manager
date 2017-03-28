@@ -172,7 +172,7 @@ class BasePlugin:
         print()
         print("Press \"y\" to continue", end=' ')
         sys.stdout.flush()
-        keystroke = "y" if hasattr(self.args, "y") and self.args.y is True else getch()
+        keystroke = "y" if getattr(self.args, "y", False) else getch()
         if keystroke in ["y", "Y"]:
             print("[Ok]")
             print(self.process_vars["action_msg_2"], end=' ')
