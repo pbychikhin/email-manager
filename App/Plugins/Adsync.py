@@ -32,7 +32,8 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             self.op_applock,
             self.op_syncdomain,
             self.op_inittracking,
-            self.op_syncrequired
+            self.op_syncrequired,
+            self.op_retrchanges
         ]
         self.lconn = None
         self.rootDSE = None
@@ -268,5 +269,23 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                                           db_account["id"]
                                       ])
             self.db.commit()
+        except psycopg2.Error:
+            self.handle_pg_exception(sys.exc_info())
+
+    def op_retrchanges(self, opseq, optotal):
+        self.stepmsg("Retrieving changes", opseq, optotal)
+        self.substepmsg("creating temporaty storage")
+        try:
+            self.dbc.execute("CREATE TEMPORARY TABLE tmp_ad_object ("
+                             "id SERIAL PRIMARY KEY,"
+                             "name TEXT DEFAULT NULL UNIQUE,"
+                             "fullname TEXT DEFAULT NULL,"
+                             "guid BYTEA NOT NULL UNIQUE,"
+                             "control_flags INTEGER DEFAULT NULL,"
+                             "time_changed TIMESTAMP(0) WITH TIME ZONE DEFAULT NULL,"
+                             "deleted BOOLEAN NOT NULL DEFAULT FALSE)"
+                             )
+            self.dbc.execute("CREATE INDEX ON tmp_ad_object(deleted)")
+        # TODO: insert LDAP statements here
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
