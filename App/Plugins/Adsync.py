@@ -274,7 +274,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
 
     def op_retrchanges(self, opseq, optotal):
         self.stepmsg("Retrieving changes", opseq, optotal)
-        self.substepmsg("creating temporaty storage")
+        self.substepmsg("creating temporaty storage for the working set")
         try:
             self.dbc.execute("CREATE TEMPORARY TABLE tmp_ad_object ("
                              "id SERIAL PRIMARY KEY,"
@@ -286,6 +286,27 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                              "deleted BOOLEAN NOT NULL DEFAULT FALSE)"
                              )
             self.dbc.execute("CREATE INDEX ON tmp_ad_object(deleted)")
-        # TODO: insert LDAP statements here
+            self.substepmsg("fetching changes from AD")
+            try:
+                self.lconn.search(search_base=self.rootDSE["defaultNamingContext"],
+                                  search_filter="(&(objectClass=user)"
+                                                "(!(uSNChanged<={}))(|(&(userAccountControl:1.2.840.113556.1.4.803:=512)"
+                                                "(userPrincipalName=*)(!(servicePrincipalName=*))"
+                                                "(!(isDeleted=TRUE)))(isDeleted=TRUE)))".format(self.db_dit_entry["dit_usn"]),
+                                  attributes=["userPrincipalName", "displayName", "objectGUID", "userAccountControl",
+                                              "usnChanged", "whenChanged", "isDeleted"],
+                                  controls=[("1.2.840.113556.1.4.417", False, None)])
+            except LDAPException:
+                self.handle_ldap_exception(sys.exc_info())
+            self.ldapresponse_removerefs(self.lconn.response)
+            for lentry in self.lconn.response:
+                for attrs in [lentry["raw_attributes"], lentry["attributes"]]:
+                    self.ldapentry_mutli2singleval(attrs)
+                if not lentry["attributes"]["isDeleted"]:
+                    if not lentry["attributes"]["userPrincipalName"]:
+                        self.substepmsg("could not add an entry with GUID {} to the working set: userPrincipalName is empty")
+                        continue
+                    user_principal_name = dict(zip(["name", "realm"], lentry["attributes"]["userPrincipalName"].split("@")))
+                    # TODO: to be continued
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
