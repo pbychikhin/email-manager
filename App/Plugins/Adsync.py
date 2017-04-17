@@ -7,6 +7,7 @@ import os.path
 import random
 import psycopg2
 import ldap3
+import validators
 from ldap3.core.exceptions import LDAPException
 from ldap3.utils.ciDict import CaseInsensitiveDict
 from yapsy.IPlugin import IPlugin
@@ -274,7 +275,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
 
     def op_retrchanges(self, opseq, optotal):
         self.stepmsg("Retrieving changes", opseq, optotal)
-        self.substepmsg("creating temporaty storage for the working set")
+        self.substepmsg("creating temporary storage for the working set")
         try:
             self.dbc.execute("CREATE TEMPORARY TABLE tmp_ad_object ("
                              "id SERIAL PRIMARY KEY,"
@@ -304,9 +305,33 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                     self.ldapentry_mutli2singleval(attrs)
                 if not lentry["attributes"]["isDeleted"]:
                     if not lentry["attributes"]["userPrincipalName"]:
-                        self.substepmsg("could not add an entry with GUID {} to the working set: userPrincipalName is empty")
+                        self.substepmsg("could not add an entry with GUID {{{}}} to the working set: userPrincipalName is empty".
+                                        format(lentry["attributes"]["objectGUID"]))
                         continue
                     user_principal_name = dict(zip(["name", "realm"], lentry["attributes"]["userPrincipalName"].split("@")))
-                    # TODO: to be continued
+                    if user_principal_name["realm"].lower() != self.db_domain_entry["name"].lower():
+                        self.substepmsg("could not add an entry with GUID {{{}}} to the working set: realm doesn't match domain".
+                                        format(lentry["attributes"]["objectGUID"]))
+                        continue
+                    user_email = user_principal_name["name"] + "@" + self.db_domain_entry["name"]
+                    if not validators.email(user_email):
+                        self.substepmsg(
+                            "could not add an entry with GUID {{{}}} to the working set: \"{}\" is not a valid email address".
+                                format(lentry["attributes"]["objectGUID"], user_email))
+                        continue
+                    self.substepmsg("adding live entry \"{}\" with GUID {{{}}} to the working set".
+                                    format(user_principal_name["name"], lentry["attributes"]["objectGUID"]))
+                    self.dbc.execute("INSERT INTO tmp_ad_object(name, fullname, guid, control_flags, time_changed) "
+                                     "VALUES(%s, %s, %s, %s, %s)",
+                                     [user_principal_name["name"], lentry["attributes"]["displayName"],
+                                      lentry["raw_attributes"]["objectGUID"], lentry["attributes"]["userAccountControl"],
+                                      lentry["attributes"]["whenChanged"]])
+                else:
+                    self.substepmsg("adding dead entry with GUID {{{}}} to the working set".
+                                    format(lentry["attributes"]["objectGUID"]))
+                    self.dbc.execute("INSERT INTO tmp_ad_object(guid, deleted) VALUES(%s, TRUE)",
+                                     [lentry["raw_attributes"]["objectGUID"]])
+            self.db.commit()
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
+        self.max_oper_usn = lentry["attributes"]["usnChanged"]
