@@ -331,7 +331,8 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                                     format(lentry["attributes"]["objectGUID"]))
                     self.dbc.execute("INSERT INTO tmp_ad_object(guid, deleted) VALUES(%s, TRUE)",
                                      [lentry["raw_attributes"]["objectGUID"]])
+                if self.max_oper_usn < lentry["attributes"]["usnChanged"]:
+                    self.max_oper_usn = lentry["attributes"]["usnChanged"]
             self.db.commit()
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
-        self.max_oper_usn = lentry["attributes"]["usnChanged"]
