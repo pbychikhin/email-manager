@@ -34,7 +34,8 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             self.op_syncdomain,
             self.op_inittracking,
             self.op_syncrequired,
-            self.op_retrchanges
+            self.op_retrchanges,
+            self.op_syncdeleted
         ]
         self.lconn = None
         self.rootDSE = None
@@ -241,7 +242,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                 except LDAPException:
                     self.handle_ldap_exception(sys.exc_info())
                 self.ldapresponse_removerefs(self.lconn.response)
-                if len(self.lconn.response) < 1:
+                if len(self.lconn.response) < 1:  # FIXME: This behavior when we delete an account just because its name is'n found in AD must be reconsidered. Chances are an account has previously been in sync with AD and has a valid GUID.
                     self.substepmsg("deleting {} - not found in the AD".format(db_account["name"]))
                     curr1.execute("DELETE FROM account WHERE id = %s", [db_account["id"]])
                 else:
@@ -334,5 +335,15 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                 if self.max_oper_usn < lentry["attributes"]["usnChanged"]:
                     self.max_oper_usn = lentry["attributes"]["usnChanged"]
             self.db.commit()
+        except psycopg2.Error:
+            self.handle_pg_exception(sys.exc_info())
+
+    def op_syncdeleted(self, opseq, optotal):
+        self.stepmsg("Synchronizing deleted accounts", opseq, optotal)
+        try:
+            self.dbc.execute("DELETE FROM account USING tmp_ad_object "
+                             "WHERE domain_id = %s AND ad_sync_enabled = TRUE AND ad_guid = tmp_ad_object.guid "
+                             "AND tmp_ad_object.deleted = TRUE", [self.db_domain_entry["id"]])
+            self.substepmsg("{} row(s) affected (deleted)".format(self.dbc.rowcount))
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
