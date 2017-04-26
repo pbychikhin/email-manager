@@ -471,6 +471,7 @@ CREATE OR REPLACE FUNCTION account_mod(sp_domain TEXT, sp_name TEXT, sp_newname 
         old_active BOOLEAN;
         old_public BOOLEAN;
         old_password_enabled BOOLEAN;
+        old_ad_guid BYTEA;
         old_ad_sync_enabled BOOLEAN;
         old_ad_sync_required BOOLEAN;
         sp_domain_id INTEGER DEFAULT NULL;
@@ -489,8 +490,8 @@ CREATE OR REPLACE FUNCTION account_mod(sp_domain TEXT, sp_name TEXT, sp_newname 
 		    domain_id = sp_domain_id)) THEN
 		    RAISE 'The account %@% already exists', sp_newname, sp_domain_name; -- Cannot rename to an existing one
 		END IF;
-		SELECT name, password, password_enabled, fullname, active, public, ad_sync_enabled, ad_sync_required
-			INTO old_name, old_password, old_password_enabled, old_fullname, old_active, old_public,
+		SELECT name, password, password_enabled, fullname, active, public, ad_guid, ad_sync_enabled, ad_sync_required
+			INTO old_name, old_password, old_password_enabled, old_fullname, old_active, old_public, old_ad_guid,
 				old_ad_sync_enabled, old_ad_sync_required
 			FROM account WHERE lower(name) = lower(sp_name) AND domain_id = sp_domain_id;
 		UPDATE account SET
@@ -500,6 +501,9 @@ CREATE OR REPLACE FUNCTION account_mod(sp_domain TEXT, sp_name TEXT, sp_newname 
 			active = COALESCE(sp_active, old_active),
 			public = COALESCE(sp_public, old_public),
 			password_enabled = COALESCE(sp_password_enabled, old_password_enabled),
+			ad_guid = CASE
+			    WHEN sp_ad_sync_enabled = FALSE THEN NULL
+			    ELSE old_ad_guid END,
 			ad_sync_enabled = COALESCE(sp_ad_sync_enabled, old_ad_sync_enabled),
 			ad_sync_required = CASE
 			    WHEN sp_ad_sync_enabled = TRUE AND sp_ad_sync_enabled <> old_ad_sync_enabled THEN TRUE

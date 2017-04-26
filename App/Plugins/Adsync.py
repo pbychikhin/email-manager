@@ -177,7 +177,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                 if self.db_domain_entry["ad_guid"] is None:
                     self.substepmsg("binding existing domain {} to the AD (updating GUID)".format(
                         self.domain_attrs["dnsRoot"]))
-                    self.dbc.execute("UPDATE domain SET ad_guid = %s, modified = CURRENT_TIMESTAMP"
+                    self.dbc.execute("UPDATE domain SET ad_guid = %s, modified = CURRENT_TIMESTAMP "
                                      "WHERE id = %s",
                                      [self.domain_attrs["objectGUID_raw"], self.db_domain_entry["id"]])
                 elif self.db_domain_entry["ad_guid"].tobytes() != self.domain_attrs["objectGUID_raw"]:
@@ -242,7 +242,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                 except LDAPException:
                     self.handle_ldap_exception(sys.exc_info())
                 self.ldapresponse_removerefs(self.lconn.response)
-                if len(self.lconn.response) < 1:  # FIXME: This behavior when we delete an account just because its name is'n found in AD must be reconsidered. Chances are an account has previously been in sync with AD and has a valid GUID.
+                if len(self.lconn.response) < 1:
                     self.substepmsg("deleting {} - not found in the AD".format(db_account["name"]))
                     curr1.execute("DELETE FROM account WHERE id = %s", [db_account["id"]])
                 else:
