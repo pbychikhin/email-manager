@@ -35,7 +35,8 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             self.op_inittracking,
             self.op_syncrequired,
             self.op_retrchanges,
-            self.op_syncdeleted
+            self.op_syncdeleted,
+            self.op_syncchanged
         ]
         self.lconn = None
         self.rootDSE = None
@@ -345,5 +346,26 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                              "WHERE domain_id = %s AND ad_sync_enabled = TRUE AND ad_guid = tmp_ad_object.guid "
                              "AND tmp_ad_object.deleted = TRUE", [self.db_domain_entry["id"]])
             self.substepmsg("{} row(s) affected (deleted)".format(self.dbc.rowcount))
+            self.db.commit()
+        except psycopg2.Error:
+            self.handle_pg_exception(sys.exc_info())
+
+    def op_syncchanged(self, opseq, optotal):
+        self.stepmsg("Synchronizing new and/or changed accounts", opseq, optotal)
+        try: # TODO: below, there is just a draft, just to start working on the operation
+            self.dbc.execute(
+                "DO $$"
+                "DECLARE r_account RECORD;"
+                "BEGIN"
+                "   CREATE TEMPORARY TABLE tmp_syncchanged_msg ("
+                "       message TEXT);"
+                "   FOR r_account IN SELECT id, name, fullname, guid, control_flags, time_changed FROM tmp_ad_object WHERE deleted = FALSE LOOP"
+                "       INSERT INTO tmp_syncchanged_msg(message) VALUES ('Adding/changing ' || r_account.name);"
+                "   END LOOP;"
+                "END $$")
+            self.dbc.execute("SELECT message FROM tmp_syncchanged_msg")
+            for db_entry in self.dbc:
+                self.substepmsg(db_entry[0])
+            self.db.commit()
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
