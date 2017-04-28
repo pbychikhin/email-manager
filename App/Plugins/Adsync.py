@@ -354,15 +354,23 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
         self.stepmsg("Synchronizing new and/or changed accounts", opseq, optotal)
         try: # TODO: below, there is just a draft, just to start working on the operation
             self.dbc.execute(
-                "DO $$"
-                "DECLARE r_account RECORD;"
-                "BEGIN"
-                "   CREATE TEMPORARY TABLE tmp_syncchanged_msg ("
-                "       message TEXT);"
-                "   FOR r_account IN SELECT id, name, fullname, guid, control_flags, time_changed FROM tmp_ad_object WHERE deleted = FALSE LOOP"
-                "       INSERT INTO tmp_syncchanged_msg(message) VALUES ('Adding/changing ' || r_account.name);"
-                "   END LOOP;"
-                "END $$")
+                "DO $$\n"
+                "DECLARE\n"
+                "   r_account RECORD;\n"
+                "   account_enabled BOOLEAN;\n"
+                "BEGIN\n"
+                "   CREATE TEMPORARY TABLE tmp_syncchanged_msg (\n"
+                "       message TEXT);\n"
+                "   FOR r_account IN SELECT id, name, fullname, guid, control_flags, time_changed FROM tmp_ad_object WHERE deleted = FALSE LOOP\n"
+                "       IF CAST((r_account.control_flags & %s) AS BOOLEAN) THEN\n"
+                "           account_enabled = FALSE;\n"
+                "       ELSE\n"
+                "           account_enabled = TRUE;\n"
+                "       END IF;\n"
+                "       INSERT INTO tmp_syncchanged_msg(message) VALUES ('enabled status of ' || r_account.name || ' is ' || account_enabled);\n"
+                "       INSERT INTO tmp_syncchanged_msg(message) VALUES ('Adding/changing ' || r_account.name);\n"
+                "   END LOOP;\n"
+                "END $$", [self.account_control_flags["ADS_UF_ACCOUNTDISABLE"]])
             self.dbc.execute("SELECT message FROM tmp_syncchanged_msg")
             for db_entry in self.dbc:
                 self.substepmsg(db_entry[0])
