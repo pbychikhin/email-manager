@@ -356,10 +356,12 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             self.dbc.execute(
                 "DO $$"
                 "DECLARE r_account RECORD;"
+                "DELCARE account_enabled BOOL;"
                 "BEGIN"
                 "   CREATE TEMPORARY TABLE tmp_syncchanged_msg ("
                 "       message TEXT);"
                 "   FOR r_account IN SELECT id, name, fullname, guid, control_flags, time_changed FROM tmp_ad_object WHERE deleted = FALSE LOOP"
+                "       IF r_account.control_flags & %s THEN"
                 "       INSERT INTO tmp_syncchanged_msg(message) VALUES ('Adding/changing ' || r_account.name);"
                 "   END LOOP;"
                 "END $$")
