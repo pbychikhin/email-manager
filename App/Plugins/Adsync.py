@@ -352,25 +352,34 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
 
     def op_syncchanged(self, opseq, optotal):
         self.stepmsg("Synchronizing new and/or changed accounts", opseq, optotal)
-        try: # TODO: below, there is just a draft, just to start working on the operation
+        try:
             self.dbc.execute(
                 "DO $$\n"
                 "DECLARE\n"
-                "   r_account RECORD;\n"
-                "   account_enabled BOOLEAN;\n"
+                "   v_account RECORD;\n"
+                "   v_account_enabled BOOLEAN;\n"
+                "   v_db_account_by_name RECORD;\n"
+                "   v_db_account_by_guid RECORD;\n"
+                "   ev_account_flag_disabled INTEGER DEFAULT %s;\n"
+                "   ev_domain_id INTEGER DEFAULT %s;\n"
                 "BEGIN\n"
                 "   CREATE TEMPORARY TABLE tmp_syncchanged_msg (\n"
                 "       message TEXT);\n"
-                "   FOR r_account IN SELECT id, name, fullname, guid, control_flags, time_changed FROM tmp_ad_object WHERE deleted = FALSE LOOP\n"
-                "       IF CAST((r_account.control_flags & %s) AS BOOLEAN) THEN\n"
-                "           account_enabled = FALSE;\n"
+                "   FOR v_account IN SELECT id, name, fullname, guid, control_flags, time_changed FROM tmp_ad_object WHERE deleted = FALSE LOOP\n"
+                "       IF (v_account.control_flags & ev_account_flag_disabled)::BOOLEAN THEN\n"
+                "           v_account_enabled = FALSE;\n"
                 "       ELSE\n"
-                "           account_enabled = TRUE;\n"
+                "           v_account_enabled = TRUE;\n"
                 "       END IF;\n"
-                "       INSERT INTO tmp_syncchanged_msg(message) VALUES ('enabled status of ' || r_account.name || ' is ' || account_enabled);\n"
-                "       INSERT INTO tmp_syncchanged_msg(message) VALUES ('Adding/changing ' || r_account.name);\n"
+                "       SELECT id, name, ad_guid, ad_sync_enabled, ad_time_changed INTO v_db_account_by_name\n"
+                "           FROM account WHERE domain_id = ev_domain_id AND name = v_account.name;\n"
+                "       SELECT id, name, ad_guid, ad_sync_enabled, ad_time_changed INTO v_db_account_by_guid\n"
+                "           FROM account WHERE domain_id = ev_domain_id AND ad_guid = v_account.guid;\n"
+                "       INSERT INTO tmp_syncchanged_msg(message) VALUES ('enabled status of ' || v_account.name || ' is ' || v_account_enabled);\n"
+                "       INSERT INTO tmp_syncchanged_msg(message) VALUES ('Adding/changing ' || v_account.name);\n"
                 "   END LOOP;\n"
-                "END $$", [self.account_control_flags["ADS_UF_ACCOUNTDISABLE"]])
+                "END $$", [self.account_control_flags["ADS_UF_ACCOUNTDISABLE"],
+                           self.db_domain_entry["id"]])
             self.dbc.execute("SELECT message FROM tmp_syncchanged_msg")
             for db_entry in self.dbc:
                 self.substepmsg(db_entry[0])
