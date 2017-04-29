@@ -353,6 +353,14 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
     def op_syncchanged(self, opseq, optotal):
         self.stepmsg("Synchronizing new and/or changed accounts", opseq, optotal)
         try:
+            # This step is done solely at the DB side.
+            # We already have all data cached in a tmp table so there is no point to involve client.
+            # Behind this step's algorithm we have the following considerations:
+            # We may have found an account by GUID and/or by NAME, and may proceed IF PERMITTED.
+            # If we found an account by GUID and not by NAME, we may UPDATE it.
+            # If we found an account by NAME and NOT by GUID, we may bind it to the GUID and UPDATE it.
+            # If we haven't found an account, we may CREATE it.
+            # Else, we can't proceed as DUPLICATE EXISTS.
             self.dbc.execute(
                 "DO $$\n"
                 "DECLARE\n"
@@ -372,11 +380,22 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                 "           v_account_enabled = TRUE;\n"
                 "       END IF;\n"
                 "       SELECT id, name, ad_guid, ad_sync_enabled, ad_time_changed INTO v_db_account_by_name\n"
-                "           FROM account WHERE domain_id = ev_domain_id AND name = v_account.name;\n"
+                "           FROM account WHERE domain_id = ev_domain_id AND lower(name) = lower(v_account.name);\n"
                 "       SELECT id, name, ad_guid, ad_sync_enabled, ad_time_changed INTO v_db_account_by_guid\n"
                 "           FROM account WHERE domain_id = ev_domain_id AND ad_guid = v_account.guid;\n"
-                "       INSERT INTO tmp_syncchanged_msg(message) VALUES ('enabled status of ' || v_account.name || ' is ' || v_account_enabled);\n"
-                "       INSERT INTO tmp_syncchanged_msg(message) VALUES ('Adding/changing ' || v_account.name);\n"
+                "       IF (v_db_account_by_name.id IS NOT NULL AND v_db_account_by_name.ad_sync_enabled) OR\n"
+                "           (v_db_account_by_guid.id IS NOT NULL AND v_db_account_by_guid.ad_sync_enabled) THEN\n"
+                "           IF (v_db_account_by_guid.id IS NOT NULL AND v_db_account_by_name.id IS NULL) THEN\n"
+                "               UPDATE account SET\n"
+                "                   name = v_account.name,\n"
+                "                   fullname = CASE WHEN v_account.fullname IS NOT NULL THEN v_account.fullname ELSE v_account.name END,\n"
+                "                   modified = CURRENT_TIMESTAMP,\n"
+                "                   active = v_account_enabled,\n"
+                "                   ad_time_changed = v_account.time_changed\n"
+                "                   WHERE id = v_db_account_by_guid.id;\n"
+                "               INSERT INTO tmp_syncchanged_msg(message) VALUES ('updated an ad-bound account ' || v_db_account_by_guid.name);"
+                
+                "       INSERT INTO tmp_syncchanged_msg(message) VALUES (v_account.name || ' is ' || v_db_account_by_name.id);\n"
                 "   END LOOP;\n"
                 "END $$", [self.account_control_flags["ADS_UF_ACCOUNTDISABLE"],
                            self.db_domain_entry["id"]])
