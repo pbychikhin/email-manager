@@ -399,6 +399,7 @@ CREATE OR REPLACE FUNCTION domain_mod(sp_name TEXT, sp_newname TEXT, sp_active B
         DECLARE old_name TEXT;
         DECLARE old_active BOOLEAN;
         DECLARE old_public BOOLEAN;
+        DECLARE old_ad_guid BYTEA;
         DECLARE old_ad_sync_enabled BOOLEAN;
     BEGIN
         IF (num_nonnulls(sp_newname, sp_active, sp_public, sp_ad_sync_enabled) = 0) THEN
@@ -411,12 +412,19 @@ CREATE OR REPLACE FUNCTION domain_mod(sp_name TEXT, sp_newname TEXT, sp_active B
 		    EXISTS(SELECT * FROM domain WHERE lower(name) = lower(sp_newname))) THEN
 		    RAISE 'The domain % already exists', sp_newname;
 		END IF;
-		SELECT name, active, public, ad_sync_enabled INTO old_name, old_active, old_public, old_ad_sync_enabled
+		SELECT name, active, public, ad_guid, ad_sync_enabled
+		    INTO old_name, old_active, old_public, old_ad_guid, old_ad_sync_enabled
 			FROM domain WHERE lower(name) = lower(sp_name);
+		IF sp_newname IS NOT NULL AND old_ad_sync_enabled AND COALESCE(sp_ad_sync_enabled, TRUE) THEN
+		    RAISE 'Domain renaming is forbidden when bound to the AD';
+		END IF;
 		UPDATE domain SET
 			name = COALESCE(sp_newname, old_name),
 			active = COALESCE(sp_active, old_active),
 			public = COALESCE(sp_public, old_public),
+            ad_guid = CASE
+                WHEN sp_ad_sync_enabled = FALSE THEN NULL
+			    ELSE old_ad_guid END,
 			ad_sync_enabled = COALESCE(sp_ad_sync_enabled, old_ad_sync_enabled),
 			modified = CURRENT_TIMESTAMP
 			WHERE lower(name) = lower(sp_name);
@@ -494,6 +502,9 @@ CREATE OR REPLACE FUNCTION account_mod(sp_domain TEXT, sp_name TEXT, sp_newname 
 			INTO old_name, old_password, old_password_enabled, old_fullname, old_active, old_public, old_ad_guid,
 				old_ad_sync_enabled, old_ad_sync_required
 			FROM account WHERE lower(name) = lower(sp_name) AND domain_id = sp_domain_id;
+		IF sp_newname IS NOT NULL AND old_ad_sync_enabled AND COALESCE(sp_ad_sync_enabled, TRUE) THEN
+		    RAISE 'Account renaming is forbidden when bound to the AD';
+		END IF;
 		UPDATE account SET
 			name = COALESCE(sp_newname, old_name),
 			password = COALESCE(sp_password, old_password),
