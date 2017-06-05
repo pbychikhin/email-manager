@@ -8,6 +8,9 @@ import random
 import psycopg2
 import ldap3
 import validators
+import smtplib
+import email.utils
+from email.message import EmailMessage
 from ldap3.core.exceptions import LDAPException
 from ldap3.utils.ciDict import CaseInsensitiveDict
 from yapsy.IPlugin import IPlugin
@@ -36,7 +39,8 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             self.op_syncrequired,
             self.op_retrchanges,
             self.op_syncdeleted,
-            self.op_syncchanged
+            self.op_syncchanged,
+            self.op_sendgreetings
         ]
         self.lconn = None
         self.rootDSE = None
@@ -367,8 +371,9 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                 "   CREATE TEMPORARY TABLE tmp_syncchanged_log (\n"
                 "       id SERIAL PRIMARY KEY,\n"
                 "       action TEXT DEFAULT 'a_generic',\n"
-                "       message TEXT,"
-                "       info1 TEXT);\n"
+                "       message TEXT,\n"
+                "       info1 TEXT,\n"
+                "       info2 TEXT);\n"
                 "   CREATE INDEX ON tmp_syncchanged_log(action);\n"
                 "   FOR v_account IN SELECT id, name, fullname, guid, guid_txt, control_flags, time_changed FROM tmp_ad_object WHERE deleted = FALSE LOOP\n"
                 "       IF (v_account.control_flags & v_account_flag_disabled)::BOOLEAN THEN\n"
@@ -415,10 +420,11 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                 "               CASE WHEN v_account.fullname IS NOT NULL THEN v_account.fullname ELSE v_account.name END,\n"
                 "               v_account.guid_txt || '/', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, v_account_enabled,\n"
                 "               v_account.guid, v_account.time_changed);\n"
-                "           INSERT INTO tmp_syncchanged_log(action, message, info1) VALUES (\n"
+                "           INSERT INTO tmp_syncchanged_log(action, message, info1, info2) VALUES (\n"
                 "               'a_insert',\n"
                 "               'added new account ' || v_account.name,\n"
-                "               v_account.name);\n"
+                "               v_account.name,\n"
+                "               CASE WHEN v_account.fullname IS NOT NULL THEN v_account.fullname ELSE v_account.name END);\n"
                 "       ELSE\n"
                 "           INSERT INTO tmp_syncchanged_log(message) VALUES (\n"
                 "               'conflict found - an account from AD, ' || v_account.name || ', {{' || v_account.guid_txt || '}}, conflicts with ' || v_db_account_by_name.name);\n"
@@ -432,4 +438,26 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             self.db.commit()
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
-# TODO: next step is about to send greetings to the new accounts from log made at the last step
+
+    def op_sendgreetings(self, opseq, optotal):  # TODO: needs working on exeptions
+        self.stepmsg("Sending greetings", opseq, optotal)
+        try:
+            self.dbc.execute("SELECT info1, info2 FROM tmp_syncchanged_log WHERE action = 'a_insert'")
+            for db_entry in self.dbc:
+                self.substepmsg("greeting {}".format(db_entry[0]))
+                msg = EmailMessage()
+                msg["Subject"] = "Welcome!"
+                msg["From"] = "postmaster@{}".format(self.db_domain_entry["name"])
+                msg["To"] = "{}@{}".format(db_entry[0], self.db_domain_entry["name"])
+                msg["Date"] = email.utils.formatdate()
+                msg.set_content("Hello {},\n\n"
+                                "Greetings from email system at {}!\n\n"
+                                "--\n"
+                                "Best regards,\n"
+                                "Postmaster".format(db_entry[1], self.db_domain_entry["name"]))
+                s = smtplib.SMTP(self.cfg.get("adsync", "smtp"))
+                s.send_message(msg)
+                s.quit()
+            self.db.commit()
+        except psycopg2.Error:
+            self.handle_pg_exception(sys.exc_info())
