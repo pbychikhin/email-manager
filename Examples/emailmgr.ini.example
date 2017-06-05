@@ -23,6 +23,7 @@ action = querydata
 host = 192.168.111.11
 user = email.client
 password = email.client
+smtp = 127.0.0.1
 
 [misc]
 debug=off
