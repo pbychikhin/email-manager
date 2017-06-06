@@ -439,7 +439,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
 
-    def op_sendgreetings(self, opseq, optotal):  # TODO: needs working on exeptions
+    def op_sendgreetings(self, opseq, optotal):
         self.stepmsg("Sending greetings", opseq, optotal)
         try:
             self.dbc.execute("SELECT info1, info2 FROM tmp_syncchanged_log WHERE action = 'a_insert'")
@@ -455,9 +455,18 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                                 "--\n"
                                 "Best regards,\n"
                                 "Postmaster".format(db_entry[1], self.db_domain_entry["name"]))
-                s = smtplib.SMTP(self.cfg.get("adsync", "smtp"))
-                s.send_message(msg)
-                s.quit()
+                try:
+                    s = smtplib.SMTP(self.cfg.get("adsync", "smtp"))
+                    s.send_message(msg)
+                    s.quit()
+                except configparser.Error:
+                    self.handle_cfg_exception(sys.exc_info())
+                except (TimeoutError, smtplib.SMTPConnectError) as e:
+                    self.substepmsg("could not send a greeting message: could not connect to the mail server")
+                    print(e)
+                    raise type(self).OpChainStopException
+                except smtplib.SMTPException:
+                    self.substepmsg("could not send a greeting message to {}: SMTP error occured".format(db_entry[0]))
             self.db.commit()
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
