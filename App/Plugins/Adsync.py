@@ -86,6 +86,11 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
                                       epilog="Only sync action is possible at the moment. And it's used by default")
         cmd.add_argument("action", help="Action to be performed", choices=self.actions, nargs="?",
                          default="sync")
+        cmdgroup = cmd.add_mutually_exclusive_group()
+        cmdgroup.add_argument("-greet", help="Send a greeting message to new accounts (default)", dest="do_greet", action='store_true')
+        cmdgroup.add_argument("-nogreet", help="Don't send a greeting message to new accounts", dest="do_greet",
+                              action='store_false')
+        cmd.set_defaults(do_greet=True)
         self.args = cmd.parse_args(args)
         self.db = db
         self.configured = True
@@ -441,32 +446,35 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
 
     def op_sendgreetings(self, opseq, optotal):
         self.stepmsg("Sending greetings", opseq, optotal)
-        try:
-            self.dbc.execute("SELECT info1, info2 FROM tmp_syncchanged_log WHERE action = 'a_insert'")
-            for db_entry in self.dbc:
-                self.substepmsg("greeting {}".format(db_entry[0]))
-                msg = EmailMessage()
-                msg["Subject"] = "Welcome!"
-                msg["From"] = "postmaster@{}".format(self.db_domain_entry["name"])
-                msg["To"] = "{}@{}".format(db_entry[0], self.db_domain_entry["name"])
-                msg["Date"] = email.utils.formatdate()
-                msg.set_content("Hello {},\n\n"
-                                "Greetings from email system at {}!\n\n"
-                                "--\n"
-                                "Best regards,\n"
-                                "Postmaster".format(db_entry[1], self.db_domain_entry["name"]))
-                try:
-                    s = smtplib.SMTP(self.cfg.get("adsync", "smtp"))
-                    s.send_message(msg)
-                    s.quit()
-                except configparser.Error:
-                    self.handle_cfg_exception(sys.exc_info())
-                except (TimeoutError, smtplib.SMTPConnectError) as e:
-                    self.substepmsg("could not send a greeting message: could not connect to the mail server")
-                    print(e)
-                    raise type(self).OpChainStopException
-                except smtplib.SMTPException:
-                    self.substepmsg("could not send a greeting message to {}: SMTP error occured".format(db_entry[0]))
-            self.db.commit()
-        except psycopg2.Error:
-            self.handle_pg_exception(sys.exc_info())
+        if self.args.do_greet:
+            try:
+                self.dbc.execute("SELECT info1, info2 FROM tmp_syncchanged_log WHERE action = 'a_insert'")
+                for db_entry in self.dbc:
+                    self.substepmsg("greeting {}".format(db_entry[0]))
+                    msg = EmailMessage()
+                    msg["Subject"] = "Welcome!"
+                    msg["From"] = "postmaster@{}".format(self.db_domain_entry["name"])
+                    msg["To"] = "{}@{}".format(db_entry[0], self.db_domain_entry["name"])
+                    msg["Date"] = email.utils.formatdate()
+                    msg.set_content("Hello {},\n\n"
+                                    "Greetings from email system at {}!\n\n"
+                                    "--\n"
+                                    "Best regards,\n"
+                                    "Postmaster".format(db_entry[1], self.db_domain_entry["name"]))
+                    try:
+                        s = smtplib.SMTP(self.cfg.get("adsync", "smtp"))
+                        s.send_message(msg)
+                        s.quit()
+                    except configparser.Error:
+                        self.handle_cfg_exception(sys.exc_info())
+                    except (TimeoutError, smtplib.SMTPConnectError) as e:
+                        self.substepmsg("could not send a greeting message: could not connect to the mail server")
+                        print(e)
+                        raise type(self).OpChainStopException
+                    except smtplib.SMTPException:
+                        self.substepmsg("could not send a greeting message to {}: SMTP error occured".format(db_entry[0]))
+                self.db.commit()
+            except psycopg2.Error:
+                self.handle_pg_exception(sys.exc_info())
+        else:
+            self.substepmsg("operation disabled by user")
