@@ -40,6 +40,7 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             self.op_retrchanges,
             self.op_syncdeleted,
             self.op_syncchanged,
+            self.op_updateusn,
             self.op_sendgreetings
         ]
         self.lconn = None
@@ -443,6 +444,18 @@ class adsync(IPlugin, libemailmgr.BasePlugin):
             self.db.commit()
         except psycopg2.Error:
             self.handle_pg_exception(sys.exc_info())
+
+    def op_updateusn(self, opseq, optotal):
+        self.stepmsg("Saving tracking state", opseq, optotal)
+        if self.max_oper_usn > self.db_dit_entry["dit_usn"]:
+            self.substepmsg("saving serial {} to the database".format(self.max_oper_usn))
+            try:
+                self.dbc.execute("UPDATE usn_tracking SET dit_usn = %s WHERE id = %s",
+                                 [self.max_oper_usn, self.db_dit_entry["id"]])
+            except psycopg2.Error:
+                self.handle_pg_exception(sys.exc_info())
+        else:
+            self.substepmsg("nothing changed since last sync session. nothing to save")
 
     def op_sendgreetings(self, opseq, optotal):
         self.stepmsg("Sending greetings", opseq, optotal)
