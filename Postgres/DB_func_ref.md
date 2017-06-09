@@ -42,10 +42,11 @@ Returns 'PLAIN' plus an account password in clear text (or NULL) for SASL auth. 
 This function is a substitute for a select statement. But it also hides database logic under the hood.  
 Returns the following domain properties: `name`, `spooldir`, `active`, `public`, `ad_sync_enabled`, `created`, `modified`.
 
-* **_GetAccountData(sp_domain TEXT, sp_name TEXT, sp_fullname TEXT)_**  
+* **_GetAccountData(sp_domain TEXT, sp_name TEXT, sp_fullname TEXT, sp_showpassword BOOLEAN)_**
 `sp_domain` is a domain name. If it is NULL, the default domain will be used.  
 `sp_name` is an account name. If it is NULL, all account names will be selected.  
-`sp_fullname` is an account full name. If it is NULL, all account full names (including NULL) will be selected.  
+`sp_fullname` is an account full name. If it is NULL, all account full names (including NULL) will be selected.
+`sp_showpassword` is a flag indincating whether the password has to be sent to a client or not. By default, asterisks are sent instead of the password.
 This function is a substitute for a select statement. But it also hides database logic under the hood.  
 Returns the following account properties: `name`, `password`, `fullname`, `spooldir`, `active`, `public`, `password_enabled`, `ad_sync_enabled`,
 `created`, `modified`, `accessed`.
@@ -56,7 +57,7 @@ Returns the following account properties: `name`, `password`, `fullname`, `spool
 * **_domain_add(sp_name TEXT, sp_active BOOLEAN, sp_public BOOLEAN) RETURNS VOID_**  
 `sp_name` is a domain name.  
 `sp_active` is a flag indicating whether the domain is is action.  
-`sp_public` is a flag indication whether the domain allows publishing it's content in the public address book.  
+`sp_public` is a flag indicating whether the domain allows publishing it's content in the public address book.
 Both `sp_active` and `sp_public` can be NULL. In this case they will be set to table's defaults.  
 Adds a new domain.  
 Does not return.  
