@@ -494,7 +494,7 @@ while (@db_ad_cache_entry{"id", "name", "fullname", "guid", "control_flags", "ti
 	    }
 	elsif (defined($db_account_entry_by_name{"id"}))
 	    {
-	    if (!defined(db_account_entry_by_name{"ad_guid"}))
+	    if (!defined($db_account_entry_by_name{"ad_guid"}))
 		{
 		if ($db_account_entry_by_name{"ad_sync_enabled"})
 		    {
